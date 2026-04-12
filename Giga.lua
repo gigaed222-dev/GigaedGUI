@@ -1,5 +1,5 @@
 -- // Giga GUI - Forsaken
--- // Исправлено: камера наверху, ходьба работает, кнопка отключения чита
+-- // Исправлена невидимость, добавлена бесконечная стамина, бинды с Esc
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -34,6 +34,7 @@ local FlyEnabled = false
 local BodyFly = nil
 local FlySpeed = 50
 local SizeBoxBarricade = 0.3
+local InfiniteStaminaEnabled = false
 
 -- Режим Speed Hack: "Shift" или "Auto"
 local SpeedMode = "Shift"
@@ -47,7 +48,7 @@ local RealRoot = nil
 -- Чит полностью выключен
 local CheatDisabled = false
 
--- Кей-бинды
+-- Кей-бинды (None означает что бинд не назначен)
 local Keybinds = {
     Menu = Enum.KeyCode.Insert,
     Invis = Enum.KeyCode.X,
@@ -66,55 +67,55 @@ local function DisableAllCheats()
     CheatDisabled = true
     
     -- Выключаем все функции
-    if SpeedEnabled then
-        SpeedEnabled = false
-        UpdateSpeed()
+    SpeedEnabled = false
+    UpdateSpeed()
+    
+    FlyEnabled = false
+    if BodyFly then
+        BodyFly:Destroy()
+        BodyFly = nil
+    end
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.PlatformStand = false end
     end
     
-    if FlyEnabled then
-        FlyEnabled = false
-        if BodyFly then
-            BodyFly:Destroy()
-            BodyFly = nil
-        end
-        local char = LocalPlayer.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then hum.PlatformStand = false end
-        end
-    end
+    NoclipEnabled = false
+    UpdateNoclip()
     
-    if NoclipEnabled then
-        NoclipEnabled = false
-        UpdateNoclip()
+    ESPEnabled = false
+    for _, h in pairs(ESPHighlights) do
+        pcall(function() h:Destroy() end)
     end
+    ESPHighlights = {}
     
-    if ESPEnabled then
-        ESPEnabled = false
-        for _, h in pairs(ESPHighlights) do
-            pcall(function() h:Destroy() end)
-        end
-        ESPHighlights = {}
-    end
-    
-    if AutoGenEnabled then
-        AutoGenEnabled = false
-    end
-    
-    if AutoBarricadeEnabled then
-        AutoBarricadeEnabled = false
-    end
+    AutoGenEnabled = false
+    AutoBarricadeEnabled = false
+    InfiniteStaminaEnabled = false
     
     if InvisEnabled then
         InvisEnabled = false
         ToggleInvis(false)
     end
     
-    -- Закрываем меню
     MenuVisible = false
     Main.Visible = false
     
     print("❌ Чит полностью отключен")
+end
+
+-- Бесконечная стамина
+local function UpdateStamina()
+    if not InfiniteStaminaEnabled or CheatDisabled then return end
+    local char = LocalPlayer.Character
+    if char then
+        local maxStamina = char:GetAttribute("MaxStamina") or 100
+        local currentStamina = char:GetAttribute("Stamina") or maxStamina
+        if currentStamina < maxStamina then
+            char:SetAttribute("Stamina", maxStamina)
+        end
+    end
 end
 
 -- Ноуклип
@@ -144,7 +145,7 @@ local function UpdateNoclip()
 end
 
 -- Скорость
-local function UpdateSpeed()
+function UpdateSpeed()
     local char = LocalPlayer.Character
     if char and not CheatDisabled then
         if SpeedEnabled then
@@ -271,7 +272,7 @@ local function doBarricade()
     end
 end
 
--- НЕВИДИМОСТЬ (фикс: камера наверху, ходьба работает)
+-- НЕВИДИМОСТЬ (исправленная версия)
 local function ToggleInvis(state)
     if CheatDisabled and state then return end
     
@@ -292,28 +293,23 @@ local function ToggleInvis(state)
             FakeCharacter = nil
         end
         
-        -- Возвращаем камеру к игроку
-        Camera.CameraSubject = hum
-        
-        -- Включаем коллизию и видимость
+        -- Возвращаем видимость
         for _, part in pairs(char:GetDescendants()) do
             if part:IsA("BasePart") then
-                part.CanCollide = true
                 part.Transparency = 0
             elseif part:IsA("Accessory") then
                 part.Handle.Transparency = 0
             end
         end
         
-        -- Возвращаем персонажа на место
+        -- Возвращаем камеру
+        Camera.CameraSubject = hum
+        
+        -- Возвращаем на место если нужно
         if RealRoot then
             root.CFrame = RealRoot
             RealRoot = nil
         end
-        
-        -- Размораживаем
-        hum.PlatformStand = false
-        root.Anchored = false
         return
     end
     
@@ -322,12 +318,12 @@ local function ToggleInvis(state)
     -- Сохраняем позицию
     RealRoot = root.CFrame
     
-    -- 1. Создаём ФЕЙКОВОГО персонажа наверху
+    -- 1. Создаём ФЕЙКОВОГО персонажа
     FakeCharacter = Instance.new("Model")
     FakeCharacter.Name = LocalPlayer.Name .. "_FAKE"
     FakeCharacter.Parent = workspace
     
-    -- Копируем внешний вид
+    -- Копируем все части
     for _, part in pairs(char:GetChildren()) do
         if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
             local clone = part:Clone()
@@ -338,13 +334,14 @@ local function ToggleInvis(state)
         elseif part:IsA("Accessory") then
             local clone = part:Clone()
             clone.Parent = FakeCharacter
+            clone.Handle.Transparency = 0
         end
     end
     
-    -- Ставим фейка на текущую позицию
+    -- Ставим фейка
     FakeCharacter:PivotTo(RealRoot)
     
-    -- 2. Делаем настоящего персонажа невидимым
+    -- 2. Делаем настоящего персонажа ПОЛНОСТЬЮ невидимым
     for _, part in pairs(char:GetDescendants()) do
         if part:IsA("BasePart") then
             part.Transparency = 1
@@ -353,29 +350,24 @@ local function ToggleInvis(state)
         end
     end
     
-    -- ВАЖНО: НЕ отключаем CanCollide, чтобы можно было ходить!
-    -- Только HumanoidRootPart должен иметь коллизию
-    root.CanCollide = true
-    
-    -- 3. Камера следит за ФЕЙКОМ
+    -- 3. Камера следит за фейком
     Camera.CameraSubject = FakeCharacter
     
-    -- 4. Постоянно обновляем: фейк стоит на месте, а мы можем ходить
+    -- 4. Постоянно обновляем
     InvisConn = RunService.RenderStepped:Connect(function()
         local c = LocalPlayer.Character
         if c and InvisEnabled and not CheatDisabled then
-            local r = c:FindFirstChild("HumanoidRootPart")
-            if r and FakeCharacter and FakeCharacter.Parent then
-                -- Фейк всегда стоит на месте
+            -- Фейк стоит на месте
+            if FakeCharacter and FakeCharacter.Parent then
                 FakeCharacter:PivotTo(RealRoot)
-                
-                -- Обновляем прозрачность новых частей
-                for _, part in pairs(c:GetDescendants()) do
-                    if part:IsA("BasePart") and part.Transparency < 1 then
-                        part.Transparency = 1
-                    elseif part:IsA("Accessory") and part.Handle.Transparency < 1 then
-                        part.Handle.Transparency = 1
-                    end
+            end
+            
+            -- Поддерживаем невидимость
+            for _, part in pairs(c:GetDescendants()) do
+                if part:IsA("BasePart") and part.Transparency < 1 then
+                    part.Transparency = 1
+                elseif part:IsA("Accessory") and part.Handle.Transparency < 1 then
+                    part.Handle.Transparency = 1
                 end
             end
         end
@@ -421,7 +413,6 @@ local function TeleportToNearest()
             end
         end
         
-        -- Обновляем позицию фейка
         if InvisEnabled and FakeCharacter then
             RealRoot = root.CFrame
             FakeCharacter:PivotTo(RealRoot)
@@ -555,8 +546,8 @@ Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(0, 27)
 
 -- Главное меню
 local Main = Instance.new("Frame")
-Main.Size = UDim2.new(0, 380, 0, 650)
-Main.Position = UDim2.new(0.5, -190, 0.5, -325)
+Main.Size = UDim2.new(0, 380, 0, 680)
+Main.Position = UDim2.new(0.5, -190, 0.5, -340)
 Main.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 Main.BorderSizePixel = 1
 Main.BorderColor3 = Color3.fromRGB(45, 45, 55)
@@ -631,7 +622,7 @@ MainContent.BackgroundTransparency = 1
 MainContent.BorderSizePixel = 0
 MainContent.ScrollBarThickness = 5
 MainContent.ScrollBarImageColor3 = Color3.fromRGB(0, 162, 255)
-MainContent.CanvasSize = UDim2.new(0, 0, 0, 700)
+MainContent.CanvasSize = UDim2.new(0, 0, 0, 750)
 MainContent.Visible = true
 MainContent.Parent = Main
 
@@ -642,7 +633,7 @@ BindsContent.BackgroundTransparency = 1
 BindsContent.BorderSizePixel = 0
 BindsContent.ScrollBarThickness = 5
 BindsContent.ScrollBarImageColor3 = Color3.fromRGB(0, 162, 255)
-BindsContent.CanvasSize = UDim2.new(0, 0, 0, 450)
+BindsContent.CanvasSize = UDim2.new(0, 0, 0, 500)
 BindsContent.Visible = false
 BindsContent.Parent = Main
 
@@ -722,7 +713,7 @@ local function CreateToggle(name, y, default, callback)
         fill.Visible = state
         callback(state)
     end)
-    return frame, function(s) state = s; fill.Visible = s end
+    return frame
 end
 
 -- Функция создания слайдера
@@ -885,7 +876,7 @@ local function CreateBindSetting(name, y, keybindName)
     bindBtn.Size = UDim2.new(0, 100, 0, 30)
     bindBtn.Position = UDim2.new(1, -112, 0.5, -15)
     bindBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-    bindBtn.Text = tostring(Keybinds[keybindName]):gsub("Enum.KeyCode.", "")
+    bindBtn.Text = Keybinds[keybindName] == nil and "None" or tostring(Keybinds[keybindName]):gsub("Enum.KeyCode.", "")
     bindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     bindBtn.Font = Enum.Font.GothamBold
     bindBtn.TextSize = 13
@@ -895,14 +886,14 @@ local function CreateBindSetting(name, y, keybindName)
     bindBtn.MouseButton1Click:Connect(function()
         if ListeningForKey == bindBtn then
             ListeningForKey = nil
-            bindBtn.Text = tostring(Keybinds[keybindName]):gsub("Enum.KeyCode.", "")
+            bindBtn.Text = Keybinds[keybindName] == nil and "None" or tostring(Keybinds[keybindName]):gsub("Enum.KeyCode.", "")
             bindBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
         else
             if ListeningForKey then
                 ListeningForKey.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
             end
             ListeningForKey = bindBtn
-            bindBtn.Text = "НАЖМИ КЛАВИШУ..."
+            bindBtn.Text = "НАЖМИ..."
             bindBtn.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
         end
     end)
@@ -918,7 +909,7 @@ local function CreateTPList()
     local sf = Instance.new("ScrollingFrame")
     sf.Name = "TPList"
     sf.Size = UDim2.new(1, -20, 0, 150)
-    sf.Position = UDim2.new(0, 10, 0, 530)
+    sf.Position = UDim2.new(0, 10, 0, 570)
     sf.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
     sf.BorderSizePixel = 0
     sf.ScrollBarThickness = 4
@@ -967,7 +958,7 @@ end
 -- Добавляем элементы на вкладку ФУНКЦИИ
 local currentY = 10
 
-local speedToggle, setSpeedToggle = CreateToggle("🚀 Speed Hack", currentY, false, function(v)
+CreateToggle("🚀 Speed Hack", currentY, false, function(v)
     SpeedEnabled = v
     UpdateSpeed()
 end)
@@ -1017,6 +1008,11 @@ currentY = currentY + 45
 
 CreateToggle("🚧 Авто-барикада", currentY, false, function(v)
     AutoBarricadeEnabled = v
+end)
+currentY = currentY + 45
+
+CreateToggle("⚡ Беск. стамина", currentY, false, function(v)
+    InfiniteStaminaEnabled = v
 end)
 currentY = currentY + 45
 
@@ -1084,7 +1080,22 @@ UserInputService.InputBegan:Connect(function(inp, gp)
     -- Если ожидаем ввод для бинда
     if ListeningForKey then
         local newKey = inp.KeyCode
-        if newKey ~= Enum.KeyCode.Unknown and newKey ~= Enum.KeyCode.Escape then
+        
+        -- Если нажат Escape - удаляем бинд
+        if newKey == Enum.KeyCode.Escape then
+            for _, elem in pairs(bindElements) do
+                if elem.Button == ListeningForKey then
+                    Keybinds[elem.BindName] = nil
+                    elem.Button.Text = "None"
+                    break
+                end
+            end
+            ListeningForKey.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+            ListeningForKey = nil
+            return
+        end
+        
+        if newKey ~= Enum.KeyCode.Unknown then
             for _, elem in pairs(bindElements) do
                 if elem.Button == ListeningForKey then
                     Keybinds[elem.BindName] = newKey
@@ -1098,8 +1109,8 @@ UserInputService.InputBegan:Connect(function(inp, gp)
         return
     end
     
-    -- Проверяем нажатые кнопки по биндам
-    if inp.KeyCode == Keybinds.Menu then
+    -- Проверяем нажатые кнопки по биндам (только если бинд не nil)
+    if Keybinds.Menu and inp.KeyCode == Keybinds.Menu then
         if CheatDisabled then
             CheatDisabled = false
             print("✅ Чит снова активен")
@@ -1111,19 +1122,19 @@ UserInputService.InputBegan:Connect(function(inp, gp)
         end
     end
     
-    if inp.KeyCode == Keybinds.DisableAll then
+    if Keybinds.DisableAll and inp.KeyCode == Keybinds.DisableAll then
         DisableAllCheats()
         return
     end
     
     if CheatDisabled then return end
     
-    if inp.KeyCode == Keybinds.Invis then
+    if Keybinds.Invis and inp.KeyCode == Keybinds.Invis then
         InvisEnabled = not InvisEnabled
         ToggleInvis(InvisEnabled)
     end
     
-    if inp.KeyCode == Keybinds.Fly then
+    if Keybinds.Fly and inp.KeyCode == Keybinds.Fly then
         FlyEnabled = not FlyEnabled
         if not FlyEnabled and BodyFly then
             BodyFly:Destroy()
@@ -1131,11 +1142,11 @@ UserInputService.InputBegan:Connect(function(inp, gp)
         end
     end
     
-    if inp.KeyCode == Keybinds.Teleport then
+    if Keybinds.Teleport and inp.KeyCode == Keybinds.Teleport then
         TeleportToNearest()
     end
     
-    if inp.KeyCode == Keybinds.Speed then
+    if Keybinds.Speed and inp.KeyCode == Keybinds.Speed then
         SpeedEnabled = not SpeedEnabled
         UpdateSpeed()
     end
@@ -1170,6 +1181,7 @@ RunService.RenderStepped:Connect(function()
     pcall(updateESP)
     pcall(UpdateFly)
     pcall(doBarricade)
+    pcall(UpdateStamina)
 end)
 
 spawn(function()
@@ -1177,6 +1189,7 @@ spawn(function()
         if CheatDisabled then continue end
         if AutoGenEnabled then pcall(doGenerator) end
         if SpeedEnabled then pcall(UpdateSpeed) end
+        if InfiniteStaminaEnabled then pcall(UpdateStamina) end
     end
 end)
 
@@ -1184,4 +1197,5 @@ print("✅ Giga GUI Loaded!")
 print("🎮 Управление:")
 print("   [Insert] - Меню | [X] - Невидимость | [Z] - Полёт")
 print("   [C] - ТП | [V] - Speed | [P] - Отключить ВСЁ")
-print("👻 Невидимость: камера наверху, ходьба работает!")
+print("⚡ Бесконечная стамина добавлена!")
+print("⌨️ В биндах: нажми Escape чтобы удалить бинд")
