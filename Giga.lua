@@ -1,5 +1,5 @@
 -- // Giga GUI - Forsaken
--- // Функции: Speed (только бег), Fly, Noclip, ESP, AutoGen, AutoBarricade, Invis (все), Teleport
+-- // С настраиваемыми кей-биндами
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -30,7 +30,7 @@ local InvisEnabled = false
 local AutoGenEnabled = false
 local AutoBarricadeEnabled = false
 local SpeedEnabled = false
-local CustomSpeed = 24
+local CustomSpeed = 50
 local FlyEnabled = false
 local BodyFly = nil
 local FlySpeed = 50
@@ -38,8 +38,20 @@ local SizeBoxBarricade = 0.3
 
 local ESPHighlights = {}
 local NoclipConn = nil
-local InvisTrack = nil
 local InvisConn = nil
+local OriginalCFrame = nil
+local InvisYOffset = -10
+
+-- Кей-бинды (по умолчанию)
+local Keybinds = {
+    Menu = Enum.KeyCode.Insert,
+    Invis = Enum.KeyCode.X,
+    Fly = Enum.KeyCode.Z,
+    Teleport = Enum.KeyCode.C,
+    Speed = Enum.KeyCode.V
+}
+
+local ListeningForKey = nil -- Какая кнопка сейчас ожидает ввод
 
 -- ========== ФУНКЦИИ ==========
 
@@ -69,20 +81,17 @@ local function UpdateNoclip()
     end
 end
 
--- Скорость (только бег на Shift)
+-- Скорость (только бег)
 local function UpdateSpeed()
     local char = LocalPlayer.Character
     if char then
         if SpeedEnabled then
-            -- Меняем ТОЛЬКО RunSpeed (бег на Shift)
             char:SetAttribute("RunSpeed", CustomSpeed)
-            -- WalkSpeed (обычная ходьба) остаётся стандартной
             local hum = char:FindFirstChildOfClass("Humanoid")
             if hum then
                 hum.WalkSpeed = 16
             end
         else
-            -- Возвращаем стандартные значения
             char:SetAttribute("RunSpeed", 24)
             local hum = char:FindFirstChildOfClass("Humanoid")
             if hum then
@@ -192,99 +201,88 @@ local function doBarricade()
     end
 end
 
--- Невидимость (для ВСЕХ персонажей)
+-- НЕВИДИМОСТЬ (Уход под карту)
 local function ToggleInvis(state)
     local char = LocalPlayer.Character
     if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
     
     if not state then
-        -- Выключение невидимости
-        if InvisTrack then 
-            InvisTrack:Stop()
-            InvisTrack = nil 
-        end
         if InvisConn then
             InvisConn:Disconnect()
             InvisConn = nil
         end
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if root then 
-            root.Anchored = false 
+        if OriginalCFrame then
+            root.CFrame = OriginalCFrame
+            OriginalCFrame = nil
         end
-        
-        -- Возвращаем видимость персонажа
         for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                part.Transparency = 0
+            if part:IsA("BasePart") then
                 part.CanCollide = true
-            elseif part:IsA("Decal") or part:IsA("Texture") then
-                part.Transparency = 0
             end
         end
-        
-        -- Включаем коллизию дверей обратно
-        pcall(function()
-            local doors = workspace.MAPS:FindFirstChild("GAME MAP"):FindFirstChild("Doors")
-            if doors then
-                for _, part in pairs(doors:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        local orig = part:GetAttribute("OriginalCollision")
-                        if orig ~= nil then
-                            part.CanCollide = orig
+        return
+    end
+    
+    OriginalCFrame = root.CFrame
+    root.CFrame = root.CFrame - Vector3.new(0, InvisYOffset, 0)
+    
+    for _, part in pairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+        end
+    end
+    
+    InvisConn = RunService.RenderStepped:Connect(function()
+        local c = LocalPlayer.Character
+        if c and InvisEnabled then
+            local r = c:FindFirstChild("HumanoidRootPart")
+            if r and OriginalCFrame then
+                local currentPos = r.CFrame.Position
+                r.CFrame = CFrame.new(currentPos.X, OriginalCFrame.Y + InvisYOffset, currentPos.Z)
+            end
+        end
+    end)
+end
+
+-- Телепорт к ближайшему выжившему
+local function TeleportToNearest()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    
+    local nearest = nil
+    local minDist = math.huge
+    
+    pcall(function()
+        local alive = workspace:FindFirstChild("PLAYERS"):FindFirstChild("ALIVE")
+        if alive then
+            for _, obj in pairs(alive:GetChildren()) do
+                if obj:IsA("Model") then
+                    local targetRoot = obj:FindFirstChild("HumanoidRootPart")
+                    local plr = Players:GetPlayerFromCharacter(obj)
+                    if targetRoot and plr and plr ~= LocalPlayer then
+                        local dist = (root.Position - targetRoot.Position).Magnitude
+                        if dist < minDist then
+                            minDist = dist
+                            nearest = targetRoot
                         end
                     end
                 end
             end
-        end)
-        return
-    end
-    
-    -- Включение невидимости
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not hum or not root then return end
-
-    -- Делаем персонажа прозрачным
-    for _, part in pairs(char:GetDescendants()) do
-        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-            part.Transparency = 1
-            part.CanCollide = false
-        elseif part:IsA("Decal") or part:IsA("Texture") then
-            part.Transparency = 1
-        end
-    end
-    root.Transparency = 0  -- RootPart оставляем видимым для камеры
-    root.CanCollide = true
-    
-    -- Отключаем коллизию дверей
-    pcall(function()
-        local doors = workspace.MAPS:FindFirstChild("GAME MAP"):FindFirstChild("Doors")
-        if doors then
-            for _, part in pairs(doors:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    if part:GetAttribute("OriginalCollision") == nil then
-                        part:SetAttribute("OriginalCollision", part.CanCollide)
-                    end
-                    part.CanCollide = false
-                end
-            end
         end
     end)
     
-    -- Поддержание невидимости при респавне
-    InvisConn = RunService.RenderStepped:Connect(function()
-        local c = LocalPlayer.Character
-        if c and InvisEnabled then
-            for _, part in pairs(c:GetDescendants()) do
-                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                    part.Transparency = 1
-                    part.CanCollide = false
-                elseif part:IsA("Decal") or part:IsA("Texture") then
-                    part.Transparency = 1
-                end
+    if nearest then
+        root.CFrame = nearest.CFrame + Vector3.new(0, 3, 2)
+        for _, p in pairs(char:GetChildren()) do
+            if p:IsA("BasePart") and p ~= root then 
+                p.CFrame = root.CFrame 
             end
         end
-    end)
+    end
 end
 
 -- ESP
@@ -322,53 +320,42 @@ local function updateESP()
     end
     ESPHighlights = {}
     
-    -- Выжившие (зелёные)
     pcall(function()
-        local alive = workspace:FindFirstChild("PLAYERS")
+        local alive = workspace:FindFirstChild("PLAYERS"):FindFirstChild("ALIVE")
         if alive then
-            alive = alive:FindFirstChild("ALIVE")
-            if alive then
-                for _, obj in pairs(alive:GetChildren()) do
-                    if obj:IsA("Model") and obj:FindFirstChild("HumanoidRootPart") then
-                        createHighlight(obj, Color3.fromRGB(0, 255, 0))
-                    end
+            for _, obj in pairs(alive:GetChildren()) do
+                if obj:IsA("Model") and obj:FindFirstChild("HumanoidRootPart") then
+                    createHighlight(obj, Color3.fromRGB(0, 255, 0))
                 end
             end
         end
     end)
     
-    -- Убийца (красный)
     pcall(function()
-        local killer = workspace:FindFirstChild("PLAYERS")
+        local killer = workspace:FindFirstChild("PLAYERS"):FindFirstChild("KILLER")
         if killer then
-            killer = killer:FindFirstChild("KILLER")
-            if killer then
-                for _, obj in pairs(killer:GetChildren()) do
-                    if obj:IsA("Model") and (obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("RootPart")) then
-                        createHighlight(obj, Color3.fromRGB(255, 0, 0))
-                    end
+            for _, obj in pairs(killer:GetChildren()) do
+                if obj:IsA("Model") and (obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("RootPart")) then
+                    createHighlight(obj, Color3.fromRGB(255, 0, 0))
                 end
             end
         end
     end)
 end
 
--- Телепорт к игрокам
+-- Список выживших для GUI
 local function GetSurvivorsList()
     local list = {}
     pcall(function()
-        local alive = workspace:FindFirstChild("PLAYERS")
+        local alive = workspace:FindFirstChild("PLAYERS"):FindFirstChild("ALIVE")
         if alive then
-            alive = alive:FindFirstChild("ALIVE")
-            if alive then
-                for _, obj in pairs(alive:GetChildren()) do
-                    if obj:IsA("Model") then
-                        local root = obj:FindFirstChild("HumanoidRootPart")
-                        if root then
-                            local plr = Players:GetPlayerFromCharacter(obj)
-                            if plr and plr ~= LocalPlayer then
-                                table.insert(list, {Name = plr.Name, Root = root})
-                            end
+            for _, obj in pairs(alive:GetChildren()) do
+                if obj:IsA("Model") then
+                    local root = obj:FindFirstChild("HumanoidRootPart")
+                    if root then
+                        local plr = Players:GetPlayerFromCharacter(obj)
+                        if plr and plr ~= LocalPlayer then
+                            table.insert(list, {Name = plr.Name, Root = root})
                         end
                     end
                 end
@@ -400,7 +387,7 @@ SG.DisplayOrder = 999
 pcall(function() SG.Parent = game:GetService("CoreGui") end)
 if not SG.Parent then pcall(function() SG.Parent = LocalPlayer:FindFirstChild("PlayerGui") end) end
 
--- Кнопка открытия (круглая)
+-- Кнопка открытия
 local OpenBtn = Instance.new("TextButton")
 OpenBtn.Size = UDim2.new(0, 55, 0, 55)
 OpenBtn.Position = UDim2.new(0, 20, 0.5, -27)
@@ -413,14 +400,12 @@ OpenBtn.TextSize = 18
 OpenBtn.Active = true
 OpenBtn.Draggable = true
 OpenBtn.Parent = SG
-local OpenCorner = Instance.new("UICorner")
-OpenCorner.CornerRadius = UDim.new(0, 27)
-OpenCorner.Parent = OpenBtn
+Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(0, 27)
 
 -- Главное меню
 local Main = Instance.new("Frame")
-Main.Size = UDim2.new(0, 350, 0, 550)
-Main.Position = UDim2.new(0.5, -175, 0.5, -275)
+Main.Size = UDim2.new(0, 380, 0, 580)
+Main.Position = UDim2.new(0.5, -190, 0.5, -290)
 Main.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 Main.BorderSizePixel = 1
 Main.BorderColor3 = Color3.fromRGB(45, 45, 55)
@@ -457,21 +442,87 @@ Close.MouseButton1Click:Connect(function()
     MenuVisible = false
 end)
 
--- Контейнер с прокруткой
-local ScrollFrame = Instance.new("ScrollingFrame")
-ScrollFrame.Size = UDim2.new(1, 0, 1, -35)
-ScrollFrame.Position = UDim2.new(0, 0, 0, 35)
-ScrollFrame.BackgroundTransparency = 1
-ScrollFrame.BorderSizePixel = 0
-ScrollFrame.ScrollBarThickness = 5
-ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(0, 162, 255)
-ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 580)
-ScrollFrame.Parent = Main
+-- Вкладки
+local TabFrame = Instance.new("Frame")
+TabFrame.Size = UDim2.new(1, 0, 0, 40)
+TabFrame.Position = UDim2.new(0, 0, 0, 35)
+TabFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
+TabFrame.BorderSizePixel = 0
+TabFrame.Parent = Main
+
+local MainTab = Instance.new("TextButton")
+MainTab.Size = UDim2.new(0.5, -2, 1, 0)
+MainTab.Position = UDim2.new(0, 0, 0, 0)
+MainTab.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+MainTab.Text = "ФУНКЦИИ"
+MainTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+MainTab.Font = Enum.Font.GothamBold
+MainTab.TextSize = 14
+MainTab.Parent = TabFrame
+Instance.new("UICorner", MainTab).CornerRadius = UDim.new(0, 0)
+
+local BindsTab = Instance.new("TextButton")
+BindsTab.Size = UDim2.new(0.5, -2, 1, 0)
+BindsTab.Position = UDim2.new(0.5, 2, 0, 0)
+BindsTab.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+BindsTab.Text = "БИНДЫ"
+BindsTab.TextColor3 = Color3.fromRGB(220, 220, 220)
+BindsTab.Font = Enum.Font.GothamBold
+BindsTab.TextSize = 14
+BindsTab.Parent = TabFrame
+Instance.new("UICorner", BindsTab).CornerRadius = UDim.new(0, 0)
+
+-- Контейнеры для вкладок
+local MainContent = Instance.new("ScrollingFrame")
+MainContent.Size = UDim2.new(1, 0, 1, -75)
+MainContent.Position = UDim2.new(0, 0, 0, 75)
+MainContent.BackgroundTransparency = 1
+MainContent.BorderSizePixel = 0
+MainContent.ScrollBarThickness = 5
+MainContent.ScrollBarImageColor3 = Color3.fromRGB(0, 162, 255)
+MainContent.CanvasSize = UDim2.new(0, 0, 0, 600)
+MainContent.Visible = true
+MainContent.Parent = Main
+
+local BindsContent = Instance.new("ScrollingFrame")
+BindsContent.Size = UDim2.new(1, 0, 1, -75)
+BindsContent.Position = UDim2.new(0, 0, 0, 75)
+BindsContent.BackgroundTransparency = 1
+BindsContent.BorderSizePixel = 0
+BindsContent.ScrollBarThickness = 5
+BindsContent.ScrollBarImageColor3 = Color3.fromRGB(0, 162, 255)
+BindsContent.CanvasSize = UDim2.new(0, 0, 0, 400)
+BindsContent.Visible = false
+BindsContent.Parent = Main
 
 local Content = Instance.new("Frame")
 Content.Size = UDim2.new(1, 0, 1, 0)
 Content.BackgroundTransparency = 1
-Content.Parent = ScrollFrame
+Content.Parent = MainContent
+
+local BindsInner = Instance.new("Frame")
+BindsInner.Size = UDim2.new(1, 0, 1, 0)
+BindsInner.BackgroundTransparency = 1
+BindsInner.Parent = BindsContent
+
+-- Переключение вкладок
+MainTab.MouseButton1Click:Connect(function()
+    MainTab.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+    MainTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+    BindsTab.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+    BindsTab.TextColor3 = Color3.fromRGB(220, 220, 220)
+    MainContent.Visible = true
+    BindsContent.Visible = false
+end)
+
+BindsTab.MouseButton1Click:Connect(function()
+    BindsTab.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+    BindsTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+    MainTab.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+    MainTab.TextColor3 = Color3.fromRGB(220, 220, 220)
+    MainContent.Visible = false
+    BindsContent.Visible = true
+end)
 
 -- Функция создания переключателя
 local function CreateToggle(name, y, default, callback)
@@ -585,6 +636,55 @@ local function CreateButton(name, y, callback)
     return btn
 end
 
+-- Функция создания настройки бинда
+local function CreateBindSetting(name, y, keybindName, defaultKey)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -20, 0, 50)
+    frame.Position = UDim2.new(0, 10, 0, y)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+    frame.Parent = BindsInner
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0, 200, 1, 0)
+    label.Position = UDim2.new(0, 12, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = Color3.fromRGB(220, 220, 220)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 14
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+
+    local bindBtn = Instance.new("TextButton")
+    bindBtn.Size = UDim2.new(0, 100, 0, 30)
+    bindBtn.Position = UDim2.new(1, -112, 0.5, -15)
+    bindBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    bindBtn.Text = tostring(Keybinds[keybindName]):gsub("Enum.KeyCode.", "")
+    bindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    bindBtn.Font = Enum.Font.GothamBold
+    bindBtn.TextSize = 13
+    bindBtn.Parent = frame
+    Instance.new("UICorner", bindBtn).CornerRadius = UDim.new(0, 4)
+
+    bindBtn.MouseButton1Click:Connect(function()
+        if ListeningForKey == bindBtn then
+            ListeningForKey = nil
+            bindBtn.Text = tostring(Keybinds[keybindName]):gsub("Enum.KeyCode.", "")
+            bindBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+        else
+            if ListeningForKey then
+                ListeningForKey.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+            end
+            ListeningForKey = bindBtn
+            bindBtn.Text = "НАЖМИ КЛАВИШУ..."
+            bindBtn.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+        end
+    end)
+
+    return frame, bindBtn, keybindName
+end
+
 -- Функция создания списка ТП
 local function CreateTPList()
     local existing = Content:FindFirstChild("TPList")
@@ -638,10 +738,10 @@ local function CreateTPList()
     sf.CanvasSize = UDim2.new(0, 0, 0, yPos + 10)
 end
 
--- Добавляем все элементы
+-- Добавляем элементы на вкладку ФУНКЦИИ
 local currentY = 10
 
-CreateToggle("🚀 Speed Hack (только бег)", currentY, false, function(v)
+CreateToggle("🚀 Speed Hack (бег)", currentY, false, function(v)
     SpeedEnabled = v
     UpdateSpeed()
 end)
@@ -694,6 +794,11 @@ CreateToggle("👻 Невидимость", currentY, false, function(v)
 end)
 currentY = currentY + 50
 
+CreateButton("📍 ТП к ближайшему", currentY, function()
+    TeleportToNearest()
+end)
+currentY = currentY + 50
+
 CreateButton("📋 Обновить список ТП", currentY, function()
     CreateTPList()
 end)
@@ -701,26 +806,87 @@ end)
 -- Создаём первый список ТП
 CreateTPList()
 
--- Обновляем CanvasSize
-ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, currentY + 200)
+MainContent.CanvasSize = UDim2.new(0, 0, 0, currentY + 200)
 
--- Обработчики событий
-OpenBtn.MouseButton1Click:Connect(function()
-    MenuVisible = not MenuVisible
-    Main.Visible = MenuVisible
-    if MenuVisible then
-        CreateTPList()
-    end
-end)
+-- Добавляем элементы на вкладку БИНДЫ
+local bindsY = 10
 
+local bindElements = {}
+
+local function createBind(name, key)
+    local frame, btn, bindName = CreateBindSetting(name, bindsY, key, nil)
+    table.insert(bindElements, {Frame = frame, Button = btn, BindName = bindName})
+    bindsY = bindsY + 55
+    return frame
+end
+
+createBind("Открыть/закрыть меню", "Menu")
+createBind("Невидимость", "Invis")
+createBind("Полёт", "Fly")
+createBind("Телепорт к ближайшему", "Teleport")
+createBind("Speed Hack", "Speed")
+
+BindsContent.CanvasSize = UDim2.new(0, 0, 0, bindsY + 20)
+
+-- Обработчик нажатий для биндов
 UserInputService.InputBegan:Connect(function(inp, gp)
     if gp then return end
-    if inp.KeyCode == Enum.KeyCode.Insert then
+    
+    -- Если ожидаем ввод для бинда
+    if ListeningForKey then
+        local newKey = inp.KeyCode
+        if newKey ~= Enum.KeyCode.Unknown and newKey ~= Enum.KeyCode.Escape then
+            for _, elem in pairs(bindElements) do
+                if elem.Button == ListeningForKey then
+                    Keybinds[elem.BindName] = newKey
+                    elem.Button.Text = tostring(newKey):gsub("Enum.KeyCode.", "")
+                    break
+                end
+            end
+        end
+        ListeningForKey.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+        ListeningForKey = nil
+        return
+    end
+    
+    -- Проверяем нажатые кнопки по биндам
+    if inp.KeyCode == Keybinds.Menu then
         MenuVisible = not MenuVisible
         Main.Visible = MenuVisible
         if MenuVisible then
             CreateTPList()
         end
+    end
+    
+    if inp.KeyCode == Keybinds.Invis then
+        InvisEnabled = not InvisEnabled
+        ToggleInvis(InvisEnabled)
+    end
+    
+    if inp.KeyCode == Keybinds.Fly then
+        FlyEnabled = not FlyEnabled
+        if not FlyEnabled and BodyFly then
+            BodyFly:Destroy()
+            BodyFly = nil
+        end
+    end
+    
+    if inp.KeyCode == Keybinds.Teleport then
+        TeleportToNearest()
+    end
+    
+    if inp.KeyCode == Keybinds.Speed then
+        SpeedEnabled = not SpeedEnabled
+        UpdateSpeed()
+    end
+end)
+
+-- Обработчик открытия через кнопку
+OpenBtn.MouseButton1Click:Connect(function()
+    MenuVisible = not MenuVisible
+    Main.Visible = MenuVisible
+    if MenuVisible then
+        CreateTPList()
     end
 end)
 
@@ -747,5 +913,8 @@ spawn(function()
     end
 end)
 
-print("✅ Giga GUI Loaded! Нажми Insert или кнопку GIGA слева.")
-print("🎮 Функции: Speed(бег), Fly, Noclip, ESP, AutoGen, AutoBarricade, Invis, Teleport")
+print("✅ Giga GUI Loaded!")
+print("🎮 Кей-бинды можно настроить во вкладке БИНДЫ")
+print("   По умолчанию:")
+print("   [Insert] - Меню | [X] - Невидимость | [Z] - Полёт")
+print("   [C] - ТП | [V] - Speed Hack")
