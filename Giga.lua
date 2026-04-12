@@ -1,5 +1,5 @@
 -- // Giga GUI - Forsaken
--- // С настраиваемыми кей-биндами
+-- // Невидимость с камерой сверху + выбор режима Speed Hack
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -36,13 +36,16 @@ local BodyFly = nil
 local FlySpeed = 50
 local SizeBoxBarricade = 0.3
 
+-- Режим Speed Hack: "Shift" или "Auto"
+local SpeedMode = "Shift" -- "Shift" или "Auto"
+
 local ESPHighlights = {}
 local NoclipConn = nil
 local InvisConn = nil
-local OriginalCFrame = nil
-local InvisYOffset = -10
+local FakeCharacter = nil -- Фейковый персонаж для невидимости
+local RealRoot = nil
 
--- Кей-бинды (по умолчанию)
+-- Кей-бинды
 local Keybinds = {
     Menu = Enum.KeyCode.Insert,
     Invis = Enum.KeyCode.X,
@@ -51,7 +54,7 @@ local Keybinds = {
     Speed = Enum.KeyCode.V
 }
 
-local ListeningForKey = nil -- Какая кнопка сейчас ожидает ввод
+local ListeningForKey = nil
 
 -- ========== ФУНКЦИИ ==========
 
@@ -81,17 +84,28 @@ local function UpdateNoclip()
     end
 end
 
--- Скорость (только бег)
+-- Скорость
 local function UpdateSpeed()
     local char = LocalPlayer.Character
     if char then
         if SpeedEnabled then
-            char:SetAttribute("RunSpeed", CustomSpeed)
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum.WalkSpeed = 16
+            if SpeedMode == "Auto" then
+                -- Авто-режим: всегда быстрый
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum.WalkSpeed = CustomSpeed
+                end
+                char:SetAttribute("RunSpeed", CustomSpeed)
+            else
+                -- Режим Shift: только бег быстрый
+                char:SetAttribute("RunSpeed", CustomSpeed)
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum.WalkSpeed = 16
+                end
             end
         else
+            -- Выключено
             char:SetAttribute("RunSpeed", 24)
             local hum = char:FindFirstChildOfClass("Humanoid")
             if hum then
@@ -201,46 +215,100 @@ local function doBarricade()
     end
 end
 
--- НЕВИДИМОСТЬ (Уход под карту)
+-- НЕВИДИМОСТЬ (Хитбокс под землёй, камера сверху)
 local function ToggleInvis(state)
     local char = LocalPlayer.Character
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not root or not hum then return end
     
     if not state then
+        -- Выключение
         if InvisConn then
             InvisConn:Disconnect()
             InvisConn = nil
         end
-        if OriginalCFrame then
-            root.CFrame = OriginalCFrame
-            OriginalCFrame = nil
+        if FakeCharacter then
+            FakeCharacter:Destroy()
+            FakeCharacter = nil
         end
+        
+        -- Возвращаем камеру к игроку
+        Camera.CameraSubject = hum
+        
+        -- Включаем коллизию
         for _, part in pairs(char:GetDescendants()) do
             if part:IsA("BasePart") then
                 part.CanCollide = true
+                part.Transparency = 0
             end
+        end
+        
+        -- Возвращаем персонажа на место фейка (если он двигался)
+        if RealRoot then
+            root.CFrame = RealRoot
+            RealRoot = nil
         end
         return
     end
     
-    OriginalCFrame = root.CFrame
-    root.CFrame = root.CFrame - Vector3.new(0, InvisYOffset, 0)
+    -- Включение невидимости
     
-    for _, part in pairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CanCollide = false
+    -- 1. Создаём ФЕЙКОВОГО персонажа наверху (которого все видят)
+    FakeCharacter = Instance.new("Model")
+    FakeCharacter.Name = LocalPlayer.Name
+    FakeCharacter.Parent = workspace
+    
+    -- Копируем внешний вид
+    for _, part in pairs(char:GetChildren()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            local clone = part:Clone()
+            clone.Parent = FakeCharacter
+            clone.Anchored = true
+            clone.CanCollide = false
+        elseif part:IsA("Accessory") then
+            local clone = part:Clone()
+            clone.Parent = FakeCharacter
         end
     end
     
+    -- Ставим фейка на текущую позицию
+    if root then
+        FakeCharacter:PivotTo(root.CFrame)
+        RealRoot = root.CFrame
+    end
+    
+    -- 2. Делаем настоящего персонажа невидимым и без коллизии
+    for _, part in pairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+            part.Transparency = 1
+        elseif part:IsA("Accessory") then
+            part.Handle.Transparency = 1
+        end
+    end
+    
+    -- 3. Опускаем ХИТБОКС под землю (но камера следит за фейком!)
+    root.CFrame = root.CFrame - Vector3.new(0, 15, 0)
+    
+    -- 4. Камера следит за ФЕЙКОМ (который стоит на месте)
+    Camera.CameraSubject = FakeCharacter
+    
+    -- 5. Постоянно обновляем: хитбокс двигается, фейк стоит на месте
     InvisConn = RunService.RenderStepped:Connect(function()
         local c = LocalPlayer.Character
         if c and InvisEnabled then
             local r = c:FindFirstChild("HumanoidRootPart")
-            if r and OriginalCFrame then
-                local currentPos = r.CFrame.Position
-                r.CFrame = CFrame.new(currentPos.X, OriginalCFrame.Y + InvisYOffset, currentPos.Z)
+            if r and FakeCharacter and FakeCharacter.Parent then
+                -- Хитбокс всегда под землёй на той же X, Z позиции
+                local pos = r.CFrame.Position
+                r.CFrame = CFrame.new(pos.X, RealRoot.Y - 15, pos.Z)
+                
+                -- Фейк всегда стоит на месте (где включили невидимость)
+                if FakeCharacter.PrimaryPart then
+                    FakeCharacter:PivotTo(RealRoot)
+                end
             end
         end
     end)
@@ -281,6 +349,12 @@ local function TeleportToNearest()
             if p:IsA("BasePart") and p ~= root then 
                 p.CFrame = root.CFrame 
             end
+        end
+        
+        -- Обновляем позицию фейка при телепорте
+        if InvisEnabled and FakeCharacter then
+            RealRoot = root.CFrame
+            FakeCharacter:PivotTo(RealRoot)
         end
     end
 end
@@ -376,6 +450,12 @@ local function TeleportToPlayer(targetRoot)
                 p.CFrame = root.CFrame 
             end
         end
+        
+        -- Обновляем позицию фейка
+        if InvisEnabled and FakeCharacter then
+            RealRoot = root.CFrame
+            FakeCharacter:PivotTo(RealRoot)
+        end
     end
 end
 
@@ -404,8 +484,8 @@ Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(0, 27)
 
 -- Главное меню
 local Main = Instance.new("Frame")
-Main.Size = UDim2.new(0, 380, 0, 580)
-Main.Position = UDim2.new(0.5, -190, 0.5, -290)
+Main.Size = UDim2.new(0, 380, 0, 600)
+Main.Position = UDim2.new(0.5, -190, 0.5, -300)
 Main.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 Main.BorderSizePixel = 1
 Main.BorderColor3 = Color3.fromRGB(45, 45, 55)
@@ -480,7 +560,7 @@ MainContent.BackgroundTransparency = 1
 MainContent.BorderSizePixel = 0
 MainContent.ScrollBarThickness = 5
 MainContent.ScrollBarImageColor3 = Color3.fromRGB(0, 162, 255)
-MainContent.CanvasSize = UDim2.new(0, 0, 0, 600)
+MainContent.CanvasSize = UDim2.new(0, 0, 0, 650)
 MainContent.Visible = true
 MainContent.Parent = Main
 
@@ -620,6 +700,74 @@ local function CreateSlider(name, y, min, max, default, callback)
     return frame
 end
 
+-- Функция создания выпадающего списка
+local function CreateDropdown(name, y, options, default, callback)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -20, 0, 50)
+    frame.Position = UDim2.new(0, 10, 0, y)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+    frame.Parent = Content
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0, 150, 1, 0)
+    label.Position = UDim2.new(0, 12, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = Color3.fromRGB(220, 220, 220)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 14
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+
+    local selected = default
+    local dropdownBtn = Instance.new("TextButton")
+    dropdownBtn.Size = UDim2.new(0, 120, 0, 30)
+    dropdownBtn.Position = UDim2.new(1, -132, 0.5, -15)
+    dropdownBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    dropdownBtn.Text = selected
+    dropdownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    dropdownBtn.Font = Enum.Font.GothamBold
+    dropdownBtn.TextSize = 13
+    dropdownBtn.Parent = frame
+    Instance.new("UICorner", dropdownBtn).CornerRadius = UDim.new(0, 4)
+
+    local optionsFrame = Instance.new("Frame")
+    optionsFrame.Size = UDim2.new(0, 120, 0, #options * 30)
+    optionsFrame.Position = UDim2.new(1, -132, 0, 40)
+    optionsFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+    optionsFrame.Visible = false
+    optionsFrame.ZIndex = 10
+    optionsFrame.Parent = frame
+    Instance.new("UICorner", optionsFrame).CornerRadius = UDim.new(0, 4)
+
+    for i, opt in ipairs(options) do
+        local optBtn = Instance.new("TextButton")
+        optBtn.Size = UDim2.new(1, 0, 0, 30)
+        optBtn.Position = UDim2.new(0, 0, 0, (i-1) * 30)
+        optBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+        optBtn.Text = opt
+        optBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+        optBtn.Font = Enum.Font.Gotham
+        optBtn.TextSize = 13
+        optBtn.ZIndex = 11
+        optBtn.Parent = optionsFrame
+        
+        optBtn.MouseButton1Click:Connect(function()
+            selected = opt
+            dropdownBtn.Text = opt
+            optionsFrame.Visible = false
+            callback(opt)
+        end)
+    end
+
+    dropdownBtn.MouseButton1Click:Connect(function()
+        optionsFrame.Visible = not optionsFrame.Visible
+    end)
+
+    return frame
+end
+
 -- Функция создания кнопки
 local function CreateButton(name, y, callback)
     local btn = Instance.new("TextButton")
@@ -693,7 +841,7 @@ local function CreateTPList()
     local sf = Instance.new("ScrollingFrame")
     sf.Name = "TPList"
     sf.Size = UDim2.new(1, -20, 0, 150)
-    sf.Position = UDim2.new(0, 10, 0, 430)
+    sf.Position = UDim2.new(0, 10, 0, 490)
     sf.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
     sf.BorderSizePixel = 0
     sf.ScrollBarThickness = 4
@@ -741,13 +889,19 @@ end
 -- Добавляем элементы на вкладку ФУНКЦИИ
 local currentY = 10
 
-CreateToggle("🚀 Speed Hack (бег)", currentY, false, function(v)
+CreateToggle("🚀 Speed Hack", currentY, false, function(v)
     SpeedEnabled = v
     UpdateSpeed()
 end)
 currentY = currentY + 45
 
-CreateSlider("⚡ Скорость бега", currentY, 24, 150, 50, function(v)
+CreateDropdown("⚙️ Режим Speed", currentY, {"Shift", "Auto"}, "Shift", function(v)
+    SpeedMode = v
+    UpdateSpeed()
+end)
+currentY = currentY + 55
+
+CreateSlider("⚡ Скорость", currentY, 24, 150, 50, function(v)
     CustomSpeed = v
     UpdateSpeed()
 end)
@@ -914,7 +1068,5 @@ spawn(function()
 end)
 
 print("✅ Giga GUI Loaded!")
-print("🎮 Кей-бинды можно настроить во вкладке БИНДЫ")
-print("   По умолчанию:")
-print("   [Insert] - Меню | [X] - Невидимость | [Z] - Полёт")
-print("   [C] - ТП | [V] - Speed Hack")
+print("👻 Невидимость: фейк наверху, хитбокс под землёй")
+print("⚡ Speed Hack: Shift (только бег) или Auto (всегда)")
