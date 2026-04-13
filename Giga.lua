@@ -1,4 +1,4 @@
--- // Giga GUI v4.0 - Все функции из Zentrix + Невидимость из Pastebin
+-- // Giga GUI v3.4 - Исправлены бинды
 -- // Автор: Gigaed
 
 local Players = game:GetService("Players")
@@ -9,8 +9,6 @@ local Camera = Workspace.CurrentCamera
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
 local TweenService = game:GetService("TweenService")
-local CollectionService = game:GetService("CollectionService")
-local MarketplaceService = game:GetService("MarketplaceService")
 
 repeat wait() until Players.LocalPlayer
 local LocalPlayer = Players.LocalPlayer
@@ -23,90 +21,38 @@ pcall(function()
     end)
 end)
 
--- ========== ЗАГРУЗКА НЕВИДИМОСТИ ==========
+-- ========== ЗАГРУЗКА НЕВИДИМОСТИ ИЗ PASTEBIN ==========
 local InvisModule = nil
 pcall(function()
     InvisModule = loadstring(game:HttpGet('https://pastebin.com/raw/3Rnd9rHf'))()
+    print("✅ Модуль невидимости загружен")
 end)
 
--- ========== ВСЕ ПЕРЕМЕННЫЕ ==========
+-- ========== ПЕРЕМЕННЫЕ ==========
 local MenuVisible = false
-local CheatDisabled = false
-local GuiDestroyed = false
-
--- Movement
+local NoclipEnabled = false
+local ESPEnabled = false
+local InvisEnabled = false
+local AutoGenEnabled = false
+local AutoBarricadeEnabled = false
 local SpeedEnabled = false
 local CustomSpeed = 24
 local FlyEnabled = false
 local FlySpeed = 1
-local NoclipEnabled = false
-local JumpEnabled = false
-local JumpPower = 50
+local InfiniteStaminaEnabled = false
+local CheatDisabled = false
+local GuiDestroyed = false
 
--- ESP
-local ESPEnabled = false
+-- ESP настройки
 local ESPPlayers = true
 local ESPKillers = true
 local ESPGenerators = true
-local ESPFuseBoxes = false
-local ESPBattery = false
-local ESPTraps = false
-local ESPWireEyes = false
-local ESPDistance = false
-local ESPLines = false
-local LimitRangerESP = 100
-local DisableLimitRanger = false
 
--- Utility
-local InvisEnabled = false
-local AutoGenEnabled = false
-local AutoBarricadeEnabled = false
-local InfiniteStaminaEnabled = false
-local AutoEscapeEnabled = false
-local AutoFarmEnabled = false
-local AutoSafeSpotEnabled = false
-local NoBlindnessEnabled = false
-local AntiConfusionEnabled = false
-local InstantPromptEnabled = false
-local BigPromptEnabled = false
-local AutoShakeWireEyes = false
-local FighterAutoParry = false
-local HitboxExpanderEnabled = false
-local HitboxSize = 15
-local InvisibilityKiller = false
-local AutoHighlightKiller = false
-
--- Teleport
-local TeleportToExitEnabled = false
-
--- Settings
-local TimeForGenerator = 1.25
-local ShakeTime = 0.5
-local BarricadeSize = 0.3
-local TimeAutoHighlight = 0.1
-
--- ESP Highlights
 local ESPHighlights = {}
 local NoclipConn = nil
 
--- Fly variables
-local FLYING = false
-local flyKeyDown, flyKeyUp
-local BodyGyro, BodyVelocity
-
--- AutoFarm variables
-local LastAction = 0
-local Cooldown = 0.5
-local CanGo = true
-local State = "Idle"
-local Teleported = false
-local SavedCFrame = nil
-local CanShake = true
-local CanParry = true
-
--- Drawing for ESP Lines
-local Drawing = nil
-pcall(function() Drawing = loadstring(game:HttpGet("https://raw.githubusercontent.com/linx/drawing/main/library.lua"))() end)
+-- Текущий раздел
+local CurrentSection = "Info"
 
 -- Кей-бинды
 local Keybinds = {
@@ -121,101 +67,16 @@ local Keybinds = {
 local ListeningForKey = nil
 local bindElements = {}
 
--- ========== ФУНКЦИИ ==========
-
--- Полное отключение
-local function DisableAllCheats()
-    CheatDisabled = true
-    GuiDestroyed = true
-    
-    SpeedEnabled = false
-    local char = LocalPlayer.Character
-    if char then
-        char:SetAttribute("RunSpeed", 24)
-        char:SetAttribute("WalkSpeed", 16)
-    end
-    
-    if FlyEnabled then
-        FlyEnabled = false
-        NOFLY()
-    end
-    
-    NoclipEnabled = false
-    UpdateNoclip()
-    
-    ESPEnabled = false
-    for _, h in pairs(ESPHighlights) do pcall(function() h:Destroy() end) end
-    ESPHighlights = {}
-    
-    AutoGenEnabled = false
-    AutoBarricadeEnabled = false
-    InfiniteStaminaEnabled = false
-    AutoEscapeEnabled = false
-    AutoFarmEnabled = false
-    AutoSafeSpotEnabled = false
-    JumpEnabled = false
-    
-    if InvisEnabled and InvisModule and InvisModule.Disable then
-        pcall(function() InvisModule:Disable() end)
-    end
-    InvisEnabled = false
-    
-    if SG then SG:Destroy(); SG = nil end
-    
-    print("❌ Giga GUI отключен")
-end
-
--- Ноуклип
-function UpdateNoclip()
-    if NoclipConn then NoclipConn:Disconnect(); NoclipConn = nil end
-    if NoclipEnabled and not CheatDisabled then
-        NoclipConn = RunService.Stepped:Connect(function()
-            local char = LocalPlayer.Character
-            if char then
-                for _, p in pairs(char:GetDescendants()) do
-                    if p:IsA("BasePart") then p.CanCollide = false end
-                end
-            end
-        end)
-    else
-        local char = LocalPlayer.Character
-        if char then
-            for _, p in pairs(char:GetDescendants()) do
-                if p:IsA("BasePart") then p.CanCollide = true end
-            end
-        end
-    end
-end
-
--- Скорость
-function UpdateSpeed()
-    local char = LocalPlayer.Character
-    if not char then return end
-    if CheatDisabled then return end
-    
-    if SpeedEnabled then
-        char:SetAttribute("RunSpeed", CustomSpeed)
-        char:SetAttribute("WalkSpeed", CustomSpeed)
-    else
-        char:SetAttribute("RunSpeed", 24)
-        char:SetAttribute("WalkSpeed", 16)
-    end
-end
-
--- Прыжок
-function UpdateJump()
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        hum.UseJumpPower = JumpEnabled
-        hum.JumpPower = JumpEnabled and JumpPower or 50
-    end
-end
+-- ========== ФУНКЦИИ ИЗ ZENTRIX ==========
 
 -- Полёт
-function sFLY()
-    repeat wait() until LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+local FLYING = false
+local flyKeyDown, flyKeyUp
+local BodyGyro, BodyVelocity
+
+local function sFLY()
+    repeat wait() until LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    
     if flyKeyDown then flyKeyDown:Disconnect() end
     if flyKeyUp then flyKeyUp:Disconnect() end
 
@@ -268,7 +129,7 @@ function sFLY()
         end)
     end
     
-    flyKeyDown = UserInputService.InputBegan:Connect(function(input, gp)
+    flyKeyDown = game:GetService("UserInputService").InputBegan:Connect(function(input, gp)
         if gp then return end
         if input.KeyCode == Enum.KeyCode.W then CONTROL.F = 1
         elseif input.KeyCode == Enum.KeyCode.S then CONTROL.B = -1
@@ -277,7 +138,7 @@ function sFLY()
         end
     end)
     
-    flyKeyUp = UserInputService.InputEnded:Connect(function(input)
+    flyKeyUp = game:GetService("UserInputService").InputEnded:Connect(function(input)
         if input.KeyCode == Enum.KeyCode.W then CONTROL.F = 0
         elseif input.KeyCode == Enum.KeyCode.S then CONTROL.B = 0
         elseif input.KeyCode == Enum.KeyCode.A then CONTROL.L = 0
@@ -288,7 +149,7 @@ function sFLY()
     FLY()
 end
 
-function NOFLY()
+local function NOFLY()
     FLYING = false
     if flyKeyDown then flyKeyDown:Disconnect() end
     if flyKeyUp then flyKeyUp:Disconnect() end
@@ -297,8 +158,45 @@ function NOFLY()
     end
 end
 
+-- Ноуклип
+local function UpdateNoclip()
+    if NoclipConn then NoclipConn:Disconnect(); NoclipConn = nil end
+    if NoclipEnabled and not CheatDisabled then
+        NoclipConn = RunService.Stepped:Connect(function()
+            local char = LocalPlayer.Character
+            if char then
+                for _, p in pairs(char:GetDescendants()) do
+                    if p:IsA("BasePart") then p.CanCollide = false end
+                end
+            end
+        end)
+    else
+        local char = LocalPlayer.Character
+        if char then
+            for _, p in pairs(char:GetDescendants()) do
+                if p:IsA("BasePart") then p.CanCollide = true end
+            end
+        end
+    end
+end
+
+-- Скорость
+function UpdateSpeed()
+    local char = LocalPlayer.Character
+    if not char then return end
+    if CheatDisabled then return end
+    
+    if SpeedEnabled then
+        char:SetAttribute("RunSpeed", CustomSpeed)
+        char:SetAttribute("WalkSpeed", CustomSpeed)
+    else
+        char:SetAttribute("RunSpeed", 24)
+        char:SetAttribute("WalkSpeed", 16)
+    end
+end
+
 -- Авто Генератор
-function doGenerator()
+local function doGenerator()
     if not AutoGenEnabled or CheatDisabled then return end
     local gui = LocalPlayer.PlayerGui:FindFirstChild("Gen")
     if gui and gui:FindFirstChild("GeneratorMain") then
@@ -307,16 +205,12 @@ function doGenerator()
 end
 
 -- Авто Барикада
-function getNewestDot()
-    for _, child in pairs(LocalPlayer.PlayerGui:GetChildren()) do
-        if child.Name == "Dot" then return child end
-    end
-    return nil
-end
-
-function doBarricade()
+local function doBarricade()
     if not AutoBarricadeEnabled or CheatDisabled then return end
-    local dot = getNewestDot()
+    local dot = nil
+    for _, child in pairs(LocalPlayer.PlayerGui:GetChildren()) do
+        if child.Name == "Dot" then dot = child; break end
+    end
     if dot then
         local container = dot:FindFirstChild("Container")
         if container then
@@ -327,14 +221,14 @@ function doBarricade()
                 local boxSize = box.AbsoluteSize
                 local conAbs = container.AbsolutePosition
                 frame.Position = UDim2.new(0, (boxAbs.X + boxSize.X * 0.5) - conAbs.X, 0, (boxAbs.Y + boxSize.Y * 0.5) - conAbs.Y)
-                box.Size = UDim2.new(BarricadeSize, 0, BarricadeSize, 0)
+                box.Size = UDim2.new(0.3, 0, 0.3, 0)
             end
         end
     end
 end
 
 -- Бесконечная стамина
-function UpdateStamina()
+local function UpdateStamina()
     if not InfiniteStaminaEnabled or CheatDisabled then return end
     local char = LocalPlayer.Character
     if char then
@@ -345,249 +239,29 @@ function UpdateStamina()
     end
 end
 
--- Невидимость
-function ToggleInvis(state)
+-- НЕВИДИМОСТЬ ИЗ PASTEBIN
+local function ToggleInvis(state)
     if CheatDisabled and state then return end
-    if not InvisModule then return end
-    if state then
-        pcall(function() InvisModule:Enable() end)
-    else
-        pcall(function() InvisModule:Disable() end)
-    end
-end
-
--- Невидимость для киллера (Mimic/Ennard)
-function ApplyInvisibility(enabled)
-    local char = LocalPlayer.Character
-    if not char then return end
-    if char:GetAttribute("Team") ~= "Killer" then return end
-    local killerType = char:GetAttribute("Character")
-    if killerType ~= "Mimic" and killerType ~= "Ennard" then return end
-
-    if not enabled then
-        for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then part.Transparency = 0 end
-        end
+    if not InvisModule then
+        print("⚠️ Модуль невидимости не загружен")
         return
     end
     
-    for _, part in pairs(char:GetDescendants()) do
-        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-            part.Transparency = 1
-        end
+    if state then
+        pcall(function()
+            InvisModule:Enable()
+        end)
+        print("👻 Невидимость ВКЛЮЧЕНА (Pastebin)")
+    else
+        pcall(function()
+            InvisModule:Disable()
+        end)
+        print("👻 Невидимость ВЫКЛЮЧЕНА")
     end
 end
-
--- No Blindness
-function UpdateNoBlindness()
-    if not NoBlindnessEnabled then return end
-    local blind = ReplicatedStorage:FindFirstChild("Modules"):FindFirstChild("BlindnessModule")
-    if blind then
-        local atm = blind:FindFirstChildOfClass("Atmosphere")
-        if atm then atm:Destroy() end
-    end
-end
-
--- Anti Confusion
-CollectionService:GetInstanceAddedSignal("Confusion"):Connect(function(instance)
-    if AntiConfusionEnabled then
-        if instance == LocalPlayer.Character then
-            CollectionService:RemoveTag(instance, "Confusion")
-        end
-    end
-end)
-
--- Instant Prompt
-function UpdateInstantPrompt()
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("ProximityPrompt") then
-            if InstantPromptEnabled then
-                if obj.HoldDuration ~= 0.1 then
-                    obj:SetAttribute("HoldDurationOld", obj.HoldDuration)
-                    obj.HoldDuration = 0.1
-                end
-            else
-                local old = obj:GetAttribute("HoldDurationOld")
-                if old then obj.HoldDuration = old end
-            end
-        end
-    end
-end
-
--- Auto Shake Wire Eyes
-function doShake(wireyesUI)
-    task.spawn(function()
-        local wireyesClient = wireyesUI:WaitForChild("WireyesClient")
-        if wireyesClient then
-            local remote = wireyesClient:WaitForChild("WireyesEvent")
-            if remote then
-                CanShake = false
-                task.spawn(function() task.wait(ShakeTime); CanShake = true end)
-                pcall(function() remote:FireServer("Shaking") end)
-                task.wait(0.05)
-                pcall(function() remote:FireServer("TakeOff", workspace:GetServerTimeNow()) end)
-            end
-        end
-    end)
-end
-
--- Tween для AutoFarm
-function TweenTo(character, cf)
-    local root = character:FindFirstChild("HumanoidRootPart") or character.PrimaryPart
-    if not root then return end
-    local distance = (root.Position - cf.Position).Magnitude
-    local time = distance / 15
-    local tween = TweenService:Create(root, TweenInfo.new(time, Enum.EasingStyle.Linear), {CFrame = cf})
-    tween:Play()
-    tween.Completed:Wait()
-end
-
--- Auto Farm
-function doAutoFarm()
-    if not AutoFarmEnabled or CheatDisabled then return end
-    local char = LocalPlayer.Character
-    if tick() - LastAction < Cooldown then return end
-    if not char or not char.PrimaryPart or char.Parent ~= workspace.PLAYERS.ALIVE then return end
-    
-    if CanGo then
-        -- Батарейки
-        if not LocalPlayer.PlayerGui:FindFirstChild("Gen") and not char:FindFirstChild("Battery") then
-            for _, child in pairs(workspace.IGNORE:GetChildren()) do
-                if child.Name == "Battery" and child:IsA("BasePart") then
-                    local attachment = child:FindFirstChild("Attachment")
-                    local prompt = attachment and attachment:FindFirstChildOfClass("ProximityPrompt")
-                    if prompt then
-                        CanGo = false
-                        LastAction = tick()
-                        TweenTo(char, child.CFrame)
-                        task.wait(0.1)
-                        fireproximityprompt(prompt)
-                        task.spawn(function() task.wait(prompt.HoldDuration + 0.25); CanGo = true end)
-                        break
-                    end
-                end
-            end
-        end
-        
-        -- Генераторы
-        if CanGo and workspace.GAME.Tasks.Gens.Enabled.Value then
-            local gens = workspace.MAPS["GAME MAP"]:FindFirstChild("Generators")
-            if gens and not LocalPlayer.PlayerGui:FindFirstChild("Gen") then
-                for _, gen in pairs(gens:GetChildren()) do
-                    if gen.Name == "Generator" and gen:GetAttribute("Progress") < 100 then
-                        local root = gen:FindFirstChild("RootPart")
-                        if root then
-                            for _, atch in pairs(root:GetChildren()) do
-                                if atch:IsA("Attachment") then
-                                    local prompt = atch:FindFirstChildOfClass("ProximityPrompt")
-                                    if prompt and prompt.Enabled then
-                                        local point = gen:FindFirstChild(atch.Name)
-                                        if point then
-                                            CanGo = false
-                                            LastAction = tick()
-                                            TweenTo(char, point.CFrame)
-                                            task.wait(1)
-                                            fireproximityprompt(prompt)
-                                            task.spawn(function() task.wait(prompt.HoldDuration + 0.75); CanGo = true end)
-                                            break
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                    if not CanGo then break end
-                end
-            end
-        end
-        
-        -- Выход
-        if CanGo and workspace.GAME.CAN_ESCAPE.Value then
-            local escapes = workspace.MAPS["GAME MAP"]:FindFirstChild("Escapes")
-            if escapes then
-                for _, part in pairs(escapes:GetChildren()) do
-                    if part:IsA("BasePart") and part:GetAttribute("Enabled") then
-                        CanGo = false
-                        LastAction = tick()
-                        TweenTo(char, part.CFrame)
-                        task.spawn(function() task.wait(1); CanGo = true end)
-                        break
-                    end
-                end
-            end
-        end
-    end
-end
-
--- Auto Escape
-function doAutoEscape()
-    if not AutoEscapeEnabled or CheatDisabled then return end
-    if Teleported or not workspace.GAME.CAN_ESCAPE.Value then return end
-    local char = LocalPlayer.Character
-    if not char or char.Parent ~= workspace.PLAYERS.ALIVE then return end
-    
-    local escapes = workspace.MAPS["GAME MAP"]:FindFirstChild("Escapes")
-    if escapes then
-        for _, part in pairs(escapes:GetChildren()) do
-            if part:IsA("BasePart") and part:GetAttribute("Enabled") and part:FindFirstChildOfClass("Highlight") and part:FindFirstChildOfClass("Highlight").Enabled then
-                if char:FindFirstChild("HumanoidRootPart") then
-                    Teleported = true
-                    char.HumanoidRootPart.Anchored = true
-                    char.PrimaryPart.CFrame = part.CFrame
-                    task.spawn(function() wait(0.15); char.HumanoidRootPart.Anchored = false end)
-                    wait(10)
-                    Teleported = false
-                end
-            end
-        end
-    end
-end
-
--- Auto Safe Spot
-function doAutoSafeSpot()
-    if not AutoSafeSpotEnabled or CheatDisabled or AutoFarmEnabled then return end
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    
-    if hum.Health > 35 then
-        SavedCFrame = char.PrimaryPart.CFrame
-    elseif hum.Health <= 35 then
-        char.PrimaryPart.CFrame = CFrame.new(0, 500, 0)
-    end
-end
-
--- Fighter Auto Parry
-workspace.DescendantAdded:Connect(function(child)
-    if not FighterAutoParry then return end
-    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    
-    if child:IsA("Highlight") and child.Name == "Highlight" and child.Parent == workspace.PLAYERS.KILLER:FindFirstChildOfClass("Model") then
-        local char = LocalPlayer.Character
-        if char and CanParry and not char:GetAttribute("IFrames") and not char:GetAttribute("InAbility") and not char:GetAttribute("Stun") and char:GetAttribute("Team") == "Survivor" and char:GetAttribute("Character") == "Survivor-Fighter" then
-            local rootPart = child.Parent:FindFirstChild("RootPart")
-            if rootPart and (rootPart.Position - hrp.Position).Magnitude <= 20 then
-                CanParry = false
-                task.spawn(function()
-                    task.wait(0.5)
-                    CanParry = true
-                end)
-                local Module = require(ReplicatedStorage.Modules.Warp).Client("Input")
-                if Module then Module:Fire(true, {"Ability", 2}) end
-            end
-        end
-    end
-    
-    -- Hitbox Expander
-    if HitboxExpanderEnabled and child:IsA("BoxHandleAdornment") then
-        child.Size = Vector3.new(HitboxSize, HitboxSize, HitboxSize)
-    end
-end)
 
 -- ESP
-function createHighlight(model, color)
+local function createHighlight(model, color)
     pcall(function()
         for _, ex in pairs(model:GetChildren()) do if ex:IsA("Highlight") then ex:Destroy() end end
         local h = Instance.new("Highlight")
@@ -602,7 +276,7 @@ function createHighlight(model, color)
     end)
 end
 
-function updateESP()
+local function updateESP()
     if not ESPEnabled or CheatDisabled then
         for _, h in pairs(ESPHighlights) do pcall(function() h:Destroy() end) end
         ESPHighlights = {}
@@ -650,47 +324,10 @@ function updateESP()
             end
         end)
     end
-    
-    if ESPFuseBoxes then
-        pcall(function()
-            local fuses = workspace:FindFirstChild("MAPS"):FindFirstChild("GAME MAP"):FindFirstChild("FuseBoxes")
-            if fuses then
-                for _, obj in pairs(fuses:GetChildren()) do
-                    if obj:IsA("Model") and obj.PrimaryPart then
-                        createHighlight(obj, Color3.fromRGB(0, 0, 255))
-                    end
-                end
-            end
-        end)
-    end
-    
-    if ESPBattery then
-        for _, obj in pairs(workspace.IGNORE:GetChildren()) do
-            if obj:IsA("BasePart") and obj.Name == "Battery" then
-                createHighlight(obj, Color3.fromRGB(0, 0, 255))
-            end
-        end
-    end
-    
-    if ESPTraps then
-        for _, obj in pairs(workspace.IGNORE:GetChildren()) do
-            if obj:IsA("Model") and obj.Name == "Trap" and obj.PrimaryPart then
-                createHighlight(obj, Color3.fromRGB(255, 0, 0))
-            end
-        end
-    end
-    
-    if ESPWireEyes then
-        for _, obj in pairs(workspace.IGNORE:GetChildren()) do
-            if obj:IsA("Model") and obj.Name == "Minion" and obj.PrimaryPart then
-                createHighlight(obj, Color3.fromRGB(255, 0, 0))
-            end
-        end
-    end
 end
 
 -- Телепорт
-function TeleportToPlayer(targetRoot)
+local function TeleportToPlayer(targetRoot)
     if CheatDisabled then return end
     local char = LocalPlayer.Character
     if not char then return end
@@ -700,7 +337,7 @@ function TeleportToPlayer(targetRoot)
     end
 end
 
-function TeleportToNearest()
+local function TeleportToNearest()
     if CheatDisabled then return end
     local char = LocalPlayer.Character
     if not char then return end
@@ -733,7 +370,7 @@ function TeleportToNearest()
     end
 end
 
-function TeleportToExit()
+local function TeleportToExit()
     if CheatDisabled then return end
     local char = LocalPlayer.Character
     if not char then return end
@@ -751,7 +388,7 @@ function TeleportToExit()
     end)
 end
 
-function GetAllPlayersList()
+local function GetAllPlayersList()
     local list = {}
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
@@ -761,23 +398,42 @@ function GetAllPlayersList()
     return list
 end
 
--- Удаление дверей
-function DeleteDoors()
-    if workspace.MAPS:FindFirstChild("GAME MAP") then
-        local doors = workspace.MAPS["GAME MAP"]:FindFirstChild("Doors")
-        if doors then doors:Destroy() end
+-- Полное отключение
+local function DisableAllCheats()
+    CheatDisabled = true
+    GuiDestroyed = true
+    
+    SpeedEnabled = false
+    local char = LocalPlayer.Character
+    if char then
+        char:SetAttribute("RunSpeed", 24)
+        char:SetAttribute("WalkSpeed", 16)
     end
-end
-
--- Пропуск катсцены
-function SkipCutscene()
-    local rigs = ReplicatedStorage:FindFirstChild("Modules"):FindFirstChild("Cutscenes"):FindFirstChild("Rigs")
-    if rigs then
-        for _, name in pairs({"IntroCam", "IntroCamWithLight", "KillCam", "OutroCam"}) do
-            local rig = rigs:FindFirstChild(name)
-            if rig then rig:Destroy() end
-        end
+    
+    if FlyEnabled then
+        FlyEnabled = false
+        NOFLY()
     end
+    
+    NoclipEnabled = false
+    UpdateNoclip()
+    
+    ESPEnabled = false
+    for _, h in pairs(ESPHighlights) do pcall(function() h:Destroy() end) end
+    ESPHighlights = {}
+    
+    AutoGenEnabled = false
+    AutoBarricadeEnabled = false
+    InfiniteStaminaEnabled = false
+    
+    if InvisEnabled and InvisModule and InvisModule.Disable then
+        pcall(function() InvisModule:Disable() end)
+    end
+    InvisEnabled = false
+    
+    if SG then SG:Destroy(); SG = nil end
+    
+    print("❌ Giga GUI отключен")
 end
 
 -- ========== GUI ==========
@@ -805,8 +461,8 @@ Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(0, 27)
 
 -- Главное окно
 local Main = Instance.new("Frame")
-Main.Size = UDim2.new(0, 650, 0, 550)
-Main.Position = UDim2.new(0.5, -325, 0.5, -275)
+Main.Size = UDim2.new(0, 600, 0, 500)
+Main.Position = UDim2.new(0.5, -300, 0.5, -250)
 Main.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 Main.BorderSizePixel = 1
 Main.BorderColor3 = Color3.fromRGB(45, 45, 55)
@@ -820,7 +476,7 @@ Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
 Title.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
-Title.Text = "GIGA GUI v4.0"
+Title.Text = "GIGA GUI v3.4"
 Title.TextColor3 = Color3.fromRGB(0, 162, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 18
@@ -848,7 +504,7 @@ TopTabs.BorderSizePixel = 0
 TopTabs.Parent = Main
 
 local CheatTab = Instance.new("TextButton")
-CheatTab.Size = UDim2.new(0.33, -2, 1, 0)
+CheatTab.Size = UDim2.new(0.5, -2, 1, 0)
 CheatTab.Position = UDim2.new(0, 0, 0, 0)
 CheatTab.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
 CheatTab.Text = "ЧИТ"
@@ -856,26 +512,18 @@ CheatTab.TextColor3 = Color3.fromRGB(255, 255, 255)
 CheatTab.Font = Enum.Font.GothamBold
 CheatTab.TextSize = 14
 CheatTab.Parent = TopTabs
+Instance.new("UICorner", CheatTab).CornerRadius = UDim.new(0, 0)
 
 local BindsTab = Instance.new("TextButton")
-BindsTab.Size = UDim2.new(0.33, -2, 1, 0)
-BindsTab.Position = UDim2.new(0.33, 2, 0, 0)
+BindsTab.Size = UDim2.new(0.5, -2, 1, 0)
+BindsTab.Position = UDim2.new(0.5, 2, 0, 0)
 BindsTab.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
 BindsTab.Text = "БИНДЫ"
 BindsTab.TextColor3 = Color3.fromRGB(220, 220, 220)
 BindsTab.Font = Enum.Font.GothamBold
 BindsTab.TextSize = 14
 BindsTab.Parent = TopTabs
-
-local MiscTab = Instance.new("TextButton")
-MiscTab.Size = UDim2.new(0.34, -2, 1, 0)
-MiscTab.Position = UDim2.new(0.66, 2, 0, 0)
-MiscTab.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-MiscTab.Text = "ПРОЧЕЕ"
-MiscTab.TextColor3 = Color3.fromRGB(220, 220, 220)
-MiscTab.Font = Enum.Font.GothamBold
-MiscTab.TextSize = 14
-MiscTab.Parent = TopTabs
+Instance.new("UICorner", BindsTab).CornerRadius = UDim.new(0, 0)
 
 -- Основной контейнер
 local MainContainer = Instance.new("Frame")
@@ -886,15 +534,16 @@ MainContainer.Parent = Main
 
 -- Боковое меню
 local SideMenu = Instance.new("Frame")
-SideMenu.Size = UDim2.new(0, 140, 1, 0)
+SideMenu.Size = UDim2.new(0, 130, 1, 0)
 SideMenu.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 SideMenu.BorderSizePixel = 0
 SideMenu.Parent = MainContainer
+Instance.new("UICorner", SideMenu).CornerRadius = UDim.new(0, 0)
 
 -- Контент
 local ContentArea = Instance.new("ScrollingFrame")
-ContentArea.Size = UDim2.new(1, -145, 1, 0)
-ContentArea.Position = UDim2.new(0, 145, 0, 0)
+ContentArea.Size = UDim2.new(1, -135, 1, 0)
+ContentArea.Position = UDim2.new(0, 135, 0, 0)
 ContentArea.BackgroundTransparency = 1
 ContentArea.BorderSizePixel = 0
 ContentArea.ScrollBarThickness = 5
@@ -907,10 +556,10 @@ ContentInner.Size = UDim2.new(1, 0, 1, 0)
 ContentInner.BackgroundTransparency = 1
 ContentInner.Parent = ContentArea
 
--- Контейнеры для вкладок
+-- Контейнер для биндов
 local BindsContainer = Instance.new("ScrollingFrame")
-BindsContainer.Size = UDim2.new(1, -145, 1, 0)
-BindsContainer.Position = UDim2.new(0, 145, 0, 0)
+BindsContainer.Size = UDim2.new(1, -135, 1, 0)
+BindsContainer.Position = UDim2.new(0, 135, 0, 0)
 BindsContainer.BackgroundTransparency = 1
 BindsContainer.BorderSizePixel = 0
 BindsContainer.ScrollBarThickness = 5
@@ -924,22 +573,6 @@ BindsInner.Size = UDim2.new(1, 0, 1, 0)
 BindsInner.BackgroundTransparency = 1
 BindsInner.Parent = BindsContainer
 
-local MiscContainer = Instance.new("ScrollingFrame")
-MiscContainer.Size = UDim2.new(1, -145, 1, 0)
-MiscContainer.Position = UDim2.new(0, 145, 0, 0)
-MiscContainer.BackgroundTransparency = 1
-MiscContainer.BorderSizePixel = 0
-MiscContainer.ScrollBarThickness = 5
-MiscContainer.ScrollBarImageColor3 = Color3.fromRGB(0, 162, 255)
-MiscContainer.CanvasSize = UDim2.new(0, 0, 0, 400)
-MiscContainer.Visible = false
-MiscContainer.Parent = MainContainer
-
-local MiscInner = Instance.new("Frame")
-MiscInner.Size = UDim2.new(1, 0, 1, 0)
-MiscInner.BackgroundTransparency = 1
-MiscInner.Parent = MiscContainer
-
 -- Функции GUI
 local function CreateSideButton(name, icon, y, callback)
     local btn = Instance.new("TextButton")
@@ -949,7 +582,7 @@ local function CreateSideButton(name, icon, y, callback)
     btn.Text = icon .. "  " .. name
     btn.TextColor3 = Color3.fromRGB(200, 200, 200)
     btn.Font = Enum.Font.Gotham
-    btn.TextSize = 12
+    btn.TextSize = 13
     btn.TextXAlignment = Enum.TextXAlignment.Left
     btn.Parent = SideMenu
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
@@ -957,37 +590,36 @@ local function CreateSideButton(name, icon, y, callback)
     return btn
 end
 
-local function CreateToggle(name, y, default, callback, parent)
-    parent = parent or ContentInner
+local function CreateToggle(name, y, default, callback)
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -20, 0, 35)
+    frame.Size = UDim2.new(1, -20, 0, 38)
     frame.Position = UDim2.new(0, 10, 0, y)
     frame.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
-    frame.Parent = parent
+    frame.Parent = ContentInner
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0, 280, 1, 0)
+    label.Size = UDim2.new(0, 250, 1, 0)
     label.Position = UDim2.new(0, 10, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = name
     label.TextColor3 = Color3.fromRGB(220, 220, 220)
     label.Font = Enum.Font.Gotham
-    label.TextSize = 12
+    label.TextSize = 13
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = frame
 
     local state = default
     local box = Instance.new("Frame")
-    box.Size = UDim2.new(0, 20, 0, 20)
-    box.Position = UDim2.new(1, -30, 0.5, -10)
+    box.Size = UDim2.new(0, 22, 0, 22)
+    box.Position = UDim2.new(1, -32, 0.5, -11)
     box.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
     box.Parent = frame
     Instance.new("UICorner", box).CornerRadius = UDim.new(0, 4)
 
     local fill = Instance.new("Frame")
-    fill.Size = UDim2.new(0, 12, 0, 12)
-    fill.Position = UDim2.new(0.5, -6, 0.5, -6)
+    fill.Size = UDim2.new(0, 14, 0, 14)
+    fill.Position = UDim2.new(0.5, -7, 0.5, -7)
     fill.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
     fill.Visible = default
     fill.Parent = box
@@ -1007,17 +639,16 @@ local function CreateToggle(name, y, default, callback, parent)
     return frame
 end
 
-local function CreateSlider(name, y, min, max, default, callback, parent)
-    parent = parent or ContentInner
+local function CreateSlider(name, y, min, max, default, callback)
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -20, 0, 60)
+    frame.Size = UDim2.new(1, -20, 0, 65)
     frame.Position = UDim2.new(0, 10, 0, y)
     frame.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
-    frame.Parent = parent
+    frame.Parent = ContentInner
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -20, 0, 20)
+    label.Size = UDim2.new(1, -20, 0, 22)
     label.Position = UDim2.new(0, 10, 0, 5)
     label.BackgroundTransparency = 1
     label.Text = name .. ": " .. default
@@ -1028,8 +659,8 @@ local function CreateSlider(name, y, min, max, default, callback, parent)
     label.Parent = frame
 
     local slider = Instance.new("TextBox")
-    slider.Size = UDim2.new(1, -20, 0, 24)
-    slider.Position = UDim2.new(0, 10, 0, 28)
+    slider.Size = UDim2.new(1, -20, 0, 26)
+    slider.Position = UDim2.new(0, 10, 0, 30)
     slider.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
     slider.Text = tostring(default)
     slider.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1054,17 +685,16 @@ local function CreateSlider(name, y, min, max, default, callback, parent)
     return frame
 end
 
-local function CreateButton(name, y, callback, parent)
-    parent = parent or ContentInner
+local function CreateContentButton(name, y, callback)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, -20, 0, 35)
+    btn.Size = UDim2.new(1, -20, 0, 38)
     btn.Position = UDim2.new(0, 10, 0, y)
     btn.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
     btn.Text = name
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 13
-    btn.Parent = parent
+    btn.Parent = ContentInner
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
     btn.MouseButton1Click:Connect(function()
         if CheatDisabled then return end
@@ -1073,6 +703,11 @@ local function CreateButton(name, y, callback, parent)
     return btn
 end
 
+local function ClearContent()
+    for _, child in pairs(ContentInner:GetChildren()) do child:Destroy() end
+end
+
+-- Функция создания настройки бинда
 local function CreateBindSetting(name, y, keybindName)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, -20, 0, 45)
@@ -1121,14 +756,6 @@ local function CreateBindSetting(name, y, keybindName)
     return frame, bindBtn, keybindName
 end
 
-local function ClearContent()
-    for _, child in pairs(ContentInner:GetChildren()) do child:Destroy() end
-end
-
-local function ClearMisc()
-    for _, child in pairs(MiscInner:GetChildren()) do child:Destroy() end
-end
-
 local function CreateTPList(yStart)
     local allPlayers = GetAllPlayersList()
     
@@ -1140,7 +767,7 @@ local function CreateTPList(yStart)
         empty.Text = "Нет игроков"
         empty.TextColor3 = Color3.fromRGB(150, 150, 150)
         empty.Font = Enum.Font.Gotham
-        empty.TextSize = 12
+        empty.TextSize = 13
         empty.Parent = ContentInner
         return yStart + 35
     end
@@ -1148,7 +775,7 @@ local function CreateTPList(yStart)
     local yPos = yStart
     for _, data in pairs(allPlayers) do
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, -20, 0, 30)
+        btn.Size = UDim2.new(1, -20, 0, 32)
         btn.Position = UDim2.new(0, 10, 0, yPos)
         btn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
         btn.Text = data.Name
@@ -1161,7 +788,7 @@ local function CreateTPList(yStart)
             if CheatDisabled then return end
             TeleportToPlayer(data.Root)
         end)
-        yPos = yPos + 35
+        yPos = yPos + 37
     end
     
     return yPos
@@ -1171,7 +798,6 @@ local function ShowSection(section)
     CurrentSection = section
     ClearContent()
     BindsContainer.Visible = false
-    MiscContainer.Visible = false
     ContentArea.Visible = true
     SideMenu.Visible = true
     
@@ -1182,17 +808,17 @@ local function ShowSection(section)
         info.Size = UDim2.new(1, -20, 0, 220)
         info.Position = UDim2.new(0, 10, 0, y)
         info.BackgroundTransparency = 1
-        info.Text = "GIGA GUI v4.0\n\nВСЕ ФУНКЦИИ ИЗ ZENTRIX + НЕВИДИМОСТЬ\n\n• Speed Hack • Fly • Noclip • Jump\n• ESP (Players, Killers, Gens, Fuses, Battery, Traps, WireEyes)\n• Невидимость • Авто-генератор • Авто-барикада\n• Беск. стамина • Авто-выход • Авто-ферма\n• Auto Safe Spot • No Blindness • Anti Confusion\n• Instant Prompt • Auto Shake WireEyes\n• Fighter Auto Parry • Hitbox Expander\n• Телепорты • Удаление дверей • Пропуск катсцен\n\nСоздатель: Gigaed"
+        info.Text = "GIGA GUI v3.4\n\nВозможности:\n• Speed Hack (работает!)\n• Fly (работает!)\n• Noclip\n• ESP (WallHack)\n• Невидимость (Pastebin)\n• Авто-генератор\n• Авто-барикада\n• Бесконечная стамина\n• Телепорты\n\nСоздатель: Gigaed"
         info.TextColor3 = Color3.fromRGB(200, 200, 200)
         info.Font = Enum.Font.Gotham
-        info.TextSize = 12
+        info.TextSize = 13
         info.TextXAlignment = Enum.TextXAlignment.Left
         info.TextYAlignment = Enum.TextYAlignment.Top
         info.Parent = ContentInner
         
         local footer = Instance.new("TextLabel")
         footer.Size = UDim2.new(1, -20, 0, 30)
-        footer.Position = UDim2.new(0, 10, 0, 400)
+        footer.Position = UDim2.new(0, 10, 0, 380)
         footer.BackgroundTransparency = 1
         footer.Text = "It's time to take your final bow!"
         footer.TextColor3 = Color3.fromRGB(255, 105, 180)
@@ -1200,111 +826,56 @@ local function ShowSection(section)
         footer.TextSize = 14
         footer.Parent = ContentInner
         
-        ContentArea.CanvasSize = UDim2.new(0, 0, 0, 450)
+        ContentArea.CanvasSize = UDim2.new(0, 0, 0, 430)
         
     elseif section == "ESP" then
         CreateToggle("👥 Игроки (зелёные)", y, true, function(v) ESPPlayers = v end)
-        y = y + 40
+        y = y + 45
         CreateToggle("🔪 Киллеры (красные)", y, true, function(v) ESPKillers = v end)
-        y = y + 40
+        y = y + 45
         CreateToggle("⚡ Генераторы (жёлтые)", y, true, function(v) ESPGenerators = v end)
-        y = y + 40
-        CreateToggle("📦 Fuse Boxes (синие)", y, false, function(v) ESPFuseBoxes = v end)
-        y = y + 40
-        CreateToggle("🔋 Батарейки (синие)", y, false, function(v) ESPBattery = v end)
-        y = y + 40
-        CreateToggle("⚠️ Ловушки (красные)", y, false, function(v) ESPTraps = v end)
-        y = y + 40
-        CreateToggle("👁 Wire Eyes (красные)", y, false, function(v) ESPWireEyes = v end)
-        y = y + 40
-        CreateToggle("✅ Включить ESP", y, false, function(v) ESPEnabled = v end)
+        y = y + 45
+        CreateToggle("👁 Включить ESP", y, false, function(v) ESPEnabled = v end)
         ContentArea.CanvasSize = UDim2.new(0, 0, 0, y + 50)
         
     elseif section == "Movement" then
         CreateToggle("🚀 Speed Hack", y, false, function(v) SpeedEnabled = v; UpdateSpeed() end)
-        y = y + 40
+        y = y + 45
         CreateSlider("⚡ Скорость", y, 16, 150, 24, function(v) CustomSpeed = v; UpdateSpeed() end)
-        y = y + 65
+        y = y + 75
         CreateToggle("✈️ Полёт", y, false, function(v) FlyEnabled = v; if v then sFLY() else NOFLY() end end)
-        y = y + 40
+        y = y + 45
         CreateSlider("🕊️ Скорость полёта", y, 1, 10, 1, function(v) FlySpeed = v end)
-        y = y + 65
+        y = y + 75
         CreateToggle("🧱 Ноуклип", y, false, function(v) NoclipEnabled = v; UpdateNoclip() end)
-        y = y + 40
-        CreateToggle("🦘 Прыжок", y, false, function(v) JumpEnabled = v; UpdateJump() end)
-        y = y + 40
-        CreateSlider("📏 Сила прыжка", y, 0, 150, 50, function(v) JumpPower = v; UpdateJump() end)
-        ContentArea.CanvasSize = UDim2.new(0, 0, 0, y + 70)
+        ContentArea.CanvasSize = UDim2.new(0, 0, 0, y + 50)
         
     elseif section == "Utility" then
         CreateToggle("👻 Невидимость", y, false, function(v) InvisEnabled = v; ToggleInvis(v) end)
-        y = y + 40
+        y = y + 45
         CreateToggle("🔧 Авто-генератор", y, false, function(v) AutoGenEnabled = v end)
-        y = y + 40
+        y = y + 45
         CreateToggle("🚧 Авто-барикада", y, false, function(v) AutoBarricadeEnabled = v end)
-        y = y + 40
+        y = y + 45
         CreateToggle("⚡ Беск. стамина", y, false, function(v) InfiniteStaminaEnabled = v end)
-        y = y + 40
-        CreateToggle("🚪 Авто-выход", y, false, function(v) AutoEscapeEnabled = v end)
-        y = y + 40
-        CreateToggle("🤖 Авто-ферма", y, false, function(v) AutoFarmEnabled = v end)
-        y = y + 40
-        CreateToggle("🛡️ Auto Safe Spot", y, false, function(v) AutoSafeSpotEnabled = v end)
-        y = y + 40
-        CreateToggle("👀 No Blindness", y, false, function(v) NoBlindnessEnabled = v end)
-        y = y + 40
-        CreateToggle("🌀 Anti Confusion", y, false, function(v) AntiConfusionEnabled = v end)
-        y = y + 40
-        CreateToggle("⚡ Instant Prompt", y, false, function(v) InstantPromptEnabled = v; UpdateInstantPrompt() end)
-        y = y + 40
-        CreateToggle("🔌 Auto Shake WireEyes", y, false, function(v) AutoShakeWireEyes = v end)
-        y = y + 40
-        CreateToggle("⚔️ Fighter Auto Parry", y, false, function(v) FighterAutoParry = v end)
-        y = y + 40
-        CreateToggle("📦 Hitbox Expander", y, false, function(v) HitboxExpanderEnabled = v end)
-        y = y + 40
-        CreateSlider("📏 Размер хитбокса", y, 0, 30, 15, function(v) HitboxSize = v end)
-        y = y + 65
-        CreateToggle("🎭 Invisible Killer", y, false, function(v) InvisibilityKiller = v; ApplyInvisibility(v) end)
         ContentArea.CanvasSize = UDim2.new(0, 0, 0, y + 50)
         
     elseif section == "Teleport" then
         local yPos = CreateTPList(y)
         y = yPos + 10
-        CreateButton("🚪 ТП на выход", y, TeleportToExit)
-        y = y + 40
-        CreateButton("❌ Отключить ВСЁ", y, DisableAllCheats)
-        ContentArea.CanvasSize = UDim2.new(0, 0, 0, y + 50)
+        CreateContentButton("🚪 ТП на выход", y, TeleportToExit)
+        y = y + 45
+        CreateContentButton("❌ Отключить ВСЁ", y, DisableAllCheats)
+        ContentArea.CanvasSize = UDim2.new(0, 0, 0, y + 60)
     end
 end
 
-local function ShowMisc()
-    ClearMisc()
-    BindsContainer.Visible = false
-    ContentArea.Visible = false
-    MiscContainer.Visible = true
-    SideMenu.Visible = false
-    
-    local y = 10
-    CreateButton("🚪 Удалить двери", y, DeleteDoors, MiscInner)
-    y = y + 40
-    CreateButton("🎬 Пропустить катсцену", y, SkipCutscene, MiscInner)
-    y = y + 40
-    CreateSlider("⏱️ Время генератора", y, 0.5, 3, 1.25, function(v) TimeForGenerator = v end, MiscInner)
-    y = y + 65
-    CreateSlider("🔌 Shake Time", y, 0.1, 1, 0.5, function(v) ShakeTime = v end, MiscInner)
-    y = y + 65
-    CreateSlider("📦 Размер барикады", y, 0.3, 1.5, 0.3, function(v) BarricadeSize = v end, MiscInner)
-    
-    MiscContainer.CanvasSize = UDim2.new(0, 0, 0, y + 50)
-end
-
 -- Создание боковых кнопок
-CreateSideButton("ℹ️ Инфо", "", 10, function() ShowSection("Info") end)
-CreateSideButton("👁 ESP", "", 53, function() ShowSection("ESP") end)
-CreateSideButton("🏃 Движение", "", 96, function() ShowSection("Movement") end)
-CreateSideButton("🔧 Утилиты", "", 139, function() ShowSection("Utility") end)
-CreateSideButton("📍 Телепорт", "", 182, function() ShowSection("Teleport") end)
+CreateSideButton("Инфо", "ℹ️", 10, function() ShowSection("Info") end)
+CreateSideButton("ESP", "👁", 53, function() ShowSection("ESP") end)
+CreateSideButton("Движение", "🏃", 96, function() ShowSection("Movement") end)
+CreateSideButton("Утилиты", "🔧", 139, function() ShowSection("Utility") end)
+CreateSideButton("Телепорт", "📍", 182, function() ShowSection("Teleport") end)
 
 ShowSection("Info")
 
@@ -1319,7 +890,7 @@ end
 createBind("Открыть/закрыть меню", "Menu")
 createBind("Невидимость", "Invis")
 createBind("Полёт", "Fly")
-createBind("Телепорт", "Teleport")
+createBind("Телепорт к ближайшему", "Teleport")
 createBind("Speed Hack", "Speed")
 createBind("Отключить ВСЁ", "DisableAll")
 
@@ -1328,29 +899,22 @@ BindsContainer.CanvasSize = UDim2.new(0, 0, 0, bindsY + 20)
 -- Переключение вкладок
 CheatTab.MouseButton1Click:Connect(function()
     CheatTab.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+    CheatTab.TextColor3 = Color3.fromRGB(255, 255, 255)
     BindsTab.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-    MiscTab.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+    BindsTab.TextColor3 = Color3.fromRGB(220, 220, 220)
     BindsContainer.Visible = false
-    MiscContainer.Visible = false
     ContentArea.Visible = true
     SideMenu.Visible = true
 end)
 
 BindsTab.MouseButton1Click:Connect(function()
     BindsTab.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+    BindsTab.TextColor3 = Color3.fromRGB(255, 255, 255)
     CheatTab.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-    MiscTab.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+    CheatTab.TextColor3 = Color3.fromRGB(220, 220, 220)
     BindsContainer.Visible = true
     ContentArea.Visible = false
-    MiscContainer.Visible = false
     SideMenu.Visible = false
-end)
-
-MiscTab.MouseButton1Click:Connect(function()
-    MiscTab.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
-    CheatTab.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-    BindsTab.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-    ShowMisc()
 end)
 
 -- Обработчики
@@ -1363,8 +927,10 @@ end)
 UserInputService.InputBegan:Connect(function(inp, gp)
     if gp or GuiDestroyed then return end
     
+    -- Если ожидаем ввод для бинда
     if ListeningForKey then
         local newKey = inp.KeyCode
+        
         if newKey == Enum.KeyCode.Escape then
             for _, elem in pairs(bindElements) do
                 if elem.Button == ListeningForKey then
@@ -1430,50 +996,7 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     task.wait(0.2)
     if NoclipEnabled then UpdateNoclip() end
     if SpeedEnabled then UpdateSpeed() end
-    if JumpEnabled then UpdateJump() end
     if InvisEnabled then task.wait(0.3); ToggleInvis(true) end
-end)
-
--- Auto Highlight Killer Camera
-LocalPlayer.PlayerGui.ChildAdded:Connect(function(child)
-    if not AutoHighlightKiller then return end
-    if child.Name == "Camera" then
-        local main = child:WaitForChild("Main")
-        if main then
-            local locateRemote = main:WaitForChild("Locate")
-            if locateRemote then
-                task.wait(TimeAutoHighlight)
-                local killerFolder = workspace:WaitForChild("PLAYERS"):WaitForChild("KILLER")
-                local killer = killerFolder:FindFirstChildOfClass("Model")
-                if killer then
-                    local root = killer:FindFirstChild("HumanoidRootPart")
-                    if root then locateRemote:FireServer(killer) end
-                end
-            end
-        end
-    end
-    
-    if child.Name == "Gen" then
-        if AutoGenEnabled and not AutoFarmEnabled then
-            task.wait(TimeForGenerator)
-            if child and child:FindFirstChild("GeneratorMain") then
-                child.GeneratorMain.Event:FireServer({ Wires = true, Switches = true, Lever = true })
-            end
-        end
-        if AutoFarmEnabled then
-            task.wait(TimeForGenerator)
-            if child and child:FindFirstChild("GeneratorMain") then
-                child.GeneratorMain.Event:FireServer({ Wires = true, Switches = true, Lever = true })
-            end
-        end
-    end
-end)
-
--- Auto Shake Wire Eyes
-LocalPlayer.PlayerGui.ChildAdded:Connect(function(child)
-    if AutoShakeWireEyes and CanShake and child.Name == "WireyesUI" then
-        doShake(child)
-    end
 end)
 
 RunService.RenderStepped:Connect(function()
@@ -1481,20 +1004,17 @@ RunService.RenderStepped:Connect(function()
     pcall(updateESP)
     pcall(doBarricade)
     pcall(UpdateStamina)
-    pcall(UpdateNoBlindness)
-    pcall(doAutoEscape)
-    pcall(doAutoSafeSpot)
-    pcall(doAutoFarm)
 end)
 
 spawn(function()
     while task.wait(0.3) do
         if GuiDestroyed or CheatDisabled then continue end
+        if AutoGenEnabled then pcall(doGenerator) end
         if SpeedEnabled then pcall(UpdateSpeed) end
+        if InfiniteStaminaEnabled then pcall(UpdateStamina) end
     end
 end)
 
-print("✅ Giga GUI v4.0 Loaded!")
-print("🎮 ВСЕ функции из Zentrix добавлены!")
-print("👻 Невидимость из Pastebin работает!")
-print("⌨️ Бинды: Insert, X, Z, C, V, P")
+print("✅ Giga GUI v3.4 Loaded!")
+print("⌨️ Бинды теперь отображаются!")
+print("🎮 Управление: Insert, X, Z, C, V, P")
