@@ -1,4 +1,4 @@
--- // Giga GUI v3.0 - Полностью переработанный интерфейс
+-- // Giga GUI v3.1 - Исправленная версия
 -- // Автор: Gigaed
 
 local Players = game:GetService("Players")
@@ -8,6 +8,7 @@ local Workspace = game:GetService("Workspace")
 local Camera = Workspace.CurrentCamera
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
+local TweenService = game:GetService("TweenService")
 
 repeat wait() until Players.LocalPlayer
 local LocalPlayer = Players.LocalPlayer
@@ -63,6 +64,9 @@ local Keybinds = {
     DisableAll = Enum.KeyCode.P
 }
 
+local ListeningForKey = nil
+local bindElements = {}
+
 -- ========== ФУНКЦИИ ==========
 
 -- Полное отключение
@@ -80,6 +84,10 @@ local function DisableAllCheats()
     
     FlyEnabled = false
     if BodyFly then BodyFly:Destroy(); BodyFly = nil end
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.PlatformStand = false end
+    end
     
     NoclipEnabled = false
     if NoclipConn then NoclipConn:Disconnect(); NoclipConn = nil end
@@ -134,20 +142,18 @@ end
 -- Скорость (ИСПРАВЛЕНО)
 function UpdateSpeed()
     local char = LocalPlayer.Character
-    if char and not CheatDisabled then
-        if SpeedEnabled then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum.WalkSpeed = CustomSpeed
-            end
-            char:SetAttribute("RunSpeed", CustomSpeed)
-        else
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum.WalkSpeed = 16
-            end
-            char:SetAttribute("RunSpeed", 24)
-        end
+    if not char then return end
+    if CheatDisabled then return end
+    
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    
+    if SpeedEnabled then
+        hum.WalkSpeed = CustomSpeed
+        char:SetAttribute("RunSpeed", CustomSpeed)
+    else
+        hum.WalkSpeed = 16
+        char:SetAttribute("RunSpeed", 24)
     end
 end
 
@@ -319,7 +325,7 @@ local function updateESP()
     end
 end
 
--- Телепорт
+-- Телепорт к игроку
 local function TeleportToPlayer(targetRoot)
     if CheatDisabled then return end
     local char = LocalPlayer.Character
@@ -333,19 +339,61 @@ local function TeleportToPlayer(targetRoot)
     end
 end
 
+-- Телепорт к ближайшему (для бинда)
+local function TeleportToNearest()
+    if CheatDisabled then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    
+    local nearest = nil
+    local minDist = math.huge
+    
+    pcall(function()
+        local alive = workspace:FindFirstChild("PLAYERS"):FindFirstChild("ALIVE")
+        if alive then
+            for _, obj in pairs(alive:GetChildren()) do
+                if obj:IsA("Model") then
+                    local targetRoot = obj:FindFirstChild("HumanoidRootPart")
+                    local plr = Players:GetPlayerFromCharacter(obj)
+                    if targetRoot and plr and plr ~= LocalPlayer then
+                        local dist = (root.Position - targetRoot.Position).Magnitude
+                        if dist < minDist then
+                            minDist = dist
+                            nearest = targetRoot
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    
+    if nearest then
+        root.CFrame = nearest.CFrame + Vector3.new(0, 3, 2)
+        for _, p in pairs(char:GetChildren()) do
+            if p:IsA("BasePart") and p ~= root then p.CFrame = root.CFrame end
+        end
+    end
+end
+
+-- Телепорт на выход
 local function TeleportToExit()
     if CheatDisabled then return end
     local char = LocalPlayer.Character
     if not char then return end
-    local exits = workspace:FindFirstChild("MAPS"):FindFirstChild("GAME MAP"):FindFirstChild("Escapes")
-    if exits then
-        for _, part in pairs(exits:GetChildren()) do
-            if part:IsA("BasePart") and part:GetAttribute("Enabled") then
-                char:MoveTo(part.Position + Vector3.new(0, 3, 0))
-                break
+    
+    pcall(function()
+        local exits = workspace:FindFirstChild("MAPS"):FindFirstChild("GAME MAP"):FindFirstChild("Escapes")
+        if exits then
+            for _, part in pairs(exits:GetChildren()) do
+                if part:IsA("BasePart") and part:GetAttribute("Enabled") then
+                    char:MoveTo(part.Position + Vector3.new(0, 3, 0))
+                    break
+                end
             end
         end
-    end
+    end)
 end
 
 -- Получение всех игроков
@@ -382,10 +430,10 @@ OpenBtn.Draggable = true
 OpenBtn.Parent = SG
 Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(0, 27)
 
--- Главное окно
+-- Главное окно (УВЕЛИЧЕННЫЙ РАЗМЕР)
 local Main = Instance.new("Frame")
-Main.Size = UDim2.new(0, 550, 0, 450)
-Main.Position = UDim2.new(0.5, -275, 0.5, -225)
+Main.Size = UDim2.new(0, 600, 0, 500)
+Main.Position = UDim2.new(0.5, -300, 0.5, -250)
 Main.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 Main.BorderSizePixel = 1
 Main.BorderColor3 = Color3.fromRGB(45, 45, 55)
@@ -399,7 +447,7 @@ Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
 Title.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
-Title.Text = "GIGA GUI v3.0"
+Title.Text = "GIGA GUI v3.1"
 Title.TextColor3 = Color3.fromRGB(0, 162, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 18
@@ -457,18 +505,27 @@ MainContainer.Parent = Main
 
 -- Боковое меню
 local SideMenu = Instance.new("Frame")
-SideMenu.Size = UDim2.new(0, 120, 1, 0)
+SideMenu.Size = UDim2.new(0, 130, 1, 0)
 SideMenu.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 SideMenu.BorderSizePixel = 0
 SideMenu.Parent = MainContainer
 Instance.new("UICorner", SideMenu).CornerRadius = UDim.new(0, 0)
 
 -- Контент
-local ContentArea = Instance.new("Frame")
-ContentArea.Size = UDim2.new(1, -125, 1, 0)
-ContentArea.Position = UDim2.new(0, 125, 0, 0)
+local ContentArea = Instance.new("ScrollingFrame")
+ContentArea.Size = UDim2.new(1, -135, 1, 0)
+ContentArea.Position = UDim2.new(0, 135, 0, 0)
 ContentArea.BackgroundTransparency = 1
+ContentArea.BorderSizePixel = 0
+ContentArea.ScrollBarThickness = 5
+ContentArea.ScrollBarImageColor3 = Color3.fromRGB(0, 162, 255)
+ContentArea.CanvasSize = UDim2.new(0, 0, 0, 0)
 ContentArea.Parent = MainContainer
+
+local ContentInner = Instance.new("Frame")
+ContentInner.Size = UDim2.new(1, 0, 1, 0)
+ContentInner.BackgroundTransparency = 1
+ContentInner.Parent = ContentArea
 
 -- Контейнер для биндов
 local BindsContainer = Instance.new("ScrollingFrame")
@@ -490,13 +547,13 @@ BindsInner.Parent = BindsContainer
 -- Функция создания кнопки бокового меню
 local function CreateSideButton(name, icon, y, callback)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, -10, 0, 35)
+    btn.Size = UDim2.new(1, -10, 0, 38)
     btn.Position = UDim2.new(0, 5, 0, y)
     btn.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
-    btn.Text = icon .. " " .. name
+    btn.Text = icon .. "  " .. name
     btn.TextColor3 = Color3.fromRGB(200, 200, 200)
     btn.Font = Enum.Font.Gotham
-    btn.TextSize = 12
+    btn.TextSize = 13
     btn.TextXAlignment = Enum.TextXAlignment.Left
     btn.Parent = SideMenu
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
@@ -507,14 +564,14 @@ end
 -- Функция создания переключателя
 local function CreateToggle(name, y, default, callback)
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -20, 0, 35)
+    frame.Size = UDim2.new(1, -20, 0, 38)
     frame.Position = UDim2.new(0, 10, 0, y)
     frame.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
-    frame.Parent = ContentArea
+    frame.Parent = ContentInner
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0, 200, 1, 0)
+    label.Size = UDim2.new(0, 250, 1, 0)
     label.Position = UDim2.new(0, 10, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = name
@@ -526,15 +583,15 @@ local function CreateToggle(name, y, default, callback)
 
     local state = default
     local box = Instance.new("Frame")
-    box.Size = UDim2.new(0, 20, 0, 20)
-    box.Position = UDim2.new(1, -30, 0.5, -10)
+    box.Size = UDim2.new(0, 22, 0, 22)
+    box.Position = UDim2.new(1, -32, 0.5, -11)
     box.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
     box.Parent = frame
     Instance.new("UICorner", box).CornerRadius = UDim.new(0, 4)
 
     local fill = Instance.new("Frame")
-    fill.Size = UDim2.new(0, 12, 0, 12)
-    fill.Position = UDim2.new(0.5, -6, 0.5, -6)
+    fill.Size = UDim2.new(0, 14, 0, 14)
+    fill.Position = UDim2.new(0.5, -7, 0.5, -7)
     fill.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
     fill.Visible = default
     fill.Parent = box
@@ -557,14 +614,14 @@ end
 -- Функция создания слайдера
 local function CreateSlider(name, y, min, max, default, callback)
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -20, 0, 60)
+    frame.Size = UDim2.new(1, -20, 0, 65)
     frame.Position = UDim2.new(0, 10, 0, y)
     frame.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
-    frame.Parent = ContentArea
+    frame.Parent = ContentInner
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -20, 0, 20)
+    label.Size = UDim2.new(1, -20, 0, 22)
     label.Position = UDim2.new(0, 10, 0, 5)
     label.BackgroundTransparency = 1
     label.Text = name .. ": " .. default
@@ -575,8 +632,8 @@ local function CreateSlider(name, y, min, max, default, callback)
     label.Parent = frame
 
     local slider = Instance.new("TextBox")
-    slider.Size = UDim2.new(1, -20, 0, 24)
-    slider.Position = UDim2.new(0, 10, 0, 28)
+    slider.Size = UDim2.new(1, -20, 0, 26)
+    slider.Position = UDim2.new(0, 10, 0, 30)
     slider.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
     slider.Text = tostring(default)
     slider.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -604,14 +661,14 @@ end
 -- Функция создания кнопки в контенте
 local function CreateContentButton(name, y, callback)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, -20, 0, 35)
+    btn.Size = UDim2.new(1, -20, 0, 38)
     btn.Position = UDim2.new(0, 10, 0, y)
     btn.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
     btn.Text = name
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 13
-    btn.Parent = ContentArea
+    btn.Parent = ContentInner
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
     btn.MouseButton1Click:Connect(function()
         if CheatDisabled then return end
@@ -620,13 +677,99 @@ local function CreateContentButton(name, y, callback)
     return btn
 end
 
+-- Функция создания настройки бинда
+local function CreateBindSetting(name, y, keybindName)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -20, 0, 45)
+    frame.Position = UDim2.new(0, 10, 0, y)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+    frame.Parent = BindsInner
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0, 220, 1, 0)
+    label.Position = UDim2.new(0, 12, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = Color3.fromRGB(220, 220, 220)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 13
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+
+    local bindBtn = Instance.new("TextButton")
+    bindBtn.Size = UDim2.new(0, 110, 0, 28)
+    bindBtn.Position = UDim2.new(1, -122, 0.5, -14)
+    bindBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    bindBtn.Text = Keybinds[keybindName] == nil and "None" or tostring(Keybinds[keybindName]):gsub("Enum.KeyCode.", "")
+    bindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    bindBtn.Font = Enum.Font.GothamBold
+    bindBtn.TextSize = 12
+    bindBtn.Parent = frame
+    Instance.new("UICorner", bindBtn).CornerRadius = UDim.new(0, 4)
+
+    bindBtn.MouseButton1Click:Connect(function()
+        if ListeningForKey == bindBtn then
+            ListeningForKey = nil
+            bindBtn.Text = Keybinds[keybindName] == nil and "None" or tostring(Keybinds[keybindName]):gsub("Enum.KeyCode.", "")
+            bindBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+        else
+            if ListeningForKey then
+                ListeningForKey.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+            end
+            ListeningForKey = bindBtn
+            bindBtn.Text = "НАЖМИ..."
+            bindBtn.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+        end
+    end)
+
+    return frame, bindBtn, keybindName
+end
+
 -- Очистка контента
 local function ClearContent()
-    for _, child in pairs(ContentArea:GetChildren()) do
-        if child:IsA("Frame") or child:IsA("TextButton") or child:IsA("ScrollingFrame") then
-            child:Destroy()
-        end
+    for _, child in pairs(ContentInner:GetChildren()) do
+        child:Destroy()
     end
+end
+
+-- Создание списка ТП
+local function CreateTPList(yStart)
+    local allPlayers = GetAllPlayersList()
+    
+    if #allPlayers == 0 then
+        local empty = Instance.new("TextLabel")
+        empty.Size = UDim2.new(1, -20, 0, 30)
+        empty.Position = UDim2.new(0, 10, 0, yStart)
+        empty.BackgroundTransparency = 1
+        empty.Text = "Нет игроков"
+        empty.TextColor3 = Color3.fromRGB(150, 150, 150)
+        empty.Font = Enum.Font.Gotham
+        empty.TextSize = 13
+        empty.Parent = ContentInner
+        return yStart + 35
+    end
+    
+    local yPos = yStart
+    for _, data in pairs(allPlayers) do
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -20, 0, 32)
+        btn.Position = UDim2.new(0, 10, 0, yPos)
+        btn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+        btn.Text = data.Name
+        btn.TextColor3 = Color3.fromRGB(220, 220, 220)
+        btn.Font = Enum.Font.Gotham
+        btn.TextSize = 12
+        btn.Parent = ContentInner
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+        btn.MouseButton1Click:Connect(function()
+            if CheatDisabled then return end
+            TeleportToPlayer(data.Root)
+        end)
+        yPos = yPos + 37
+    end
+    
+    return yPos
 end
 
 -- Показ секции
@@ -635,109 +778,88 @@ local function ShowSection(section)
     ClearContent()
     BindsContainer.Visible = false
     ContentArea.Visible = true
+    SideMenu.Visible = true
     
     local y = 10
     
     if section == "Info" then
         local info = Instance.new("TextLabel")
-        info.Size = UDim2.new(1, -20, 0, 200)
+        info.Size = UDim2.new(1, -20, 0, 220)
         info.Position = UDim2.new(0, 10, 0, y)
         info.BackgroundTransparency = 1
-        info.Text = "GIGA GUI v3.0\n\nВозможности:\n• Speed Hack\n• Fly\n• Noclip\n• ESP (WallHack)\n• Невидимость\n• Авто-генератор\n• Авто-барикада\n• Бесконечная стамина\n• Телепорты\n\nСоздатель: Gigaed"
+        info.Text = "GIGA GUI v3.1\n\nВозможности:\n• Speed Hack (работает!)\n• Fly\n• Noclip\n• ESP (WallHack)\n• Невидимость\n• Авто-генератор\n• Авто-барикада\n• Бесконечная стамина\n• Телепорты\n\nСоздатель: Gigaed"
         info.TextColor3 = Color3.fromRGB(200, 200, 200)
         info.Font = Enum.Font.Gotham
         info.TextSize = 13
         info.TextXAlignment = Enum.TextXAlignment.Left
         info.TextYAlignment = Enum.TextYAlignment.Top
-        info.Parent = ContentArea
+        info.Parent = ContentInner
         
         local footer = Instance.new("TextLabel")
         footer.Size = UDim2.new(1, -20, 0, 30)
-        footer.Position = UDim2.new(0, 10, 0, 340)
+        footer.Position = UDim2.new(0, 10, 0, 380)
         footer.BackgroundTransparency = 1
         footer.Text = "It's time to take your final bow!"
         footer.TextColor3 = Color3.fromRGB(255, 105, 180)
         footer.Font = Enum.Font.GothamBold
         footer.TextSize = 14
-        footer.Parent = ContentArea
+        footer.Parent = ContentInner
+        
+        ContentArea.CanvasSize = UDim2.new(0, 0, 0, 430)
         
     elseif section == "ESP" then
         CreateToggle("👥 Игроки (зелёные)", y, true, function(v) ESPPlayers = v end)
-        y = y + 40
+        y = y + 45
         CreateToggle("🔪 Киллеры (красные)", y, true, function(v) ESPKillers = v end)
-        y = y + 40
+        y = y + 45
         CreateToggle("⚡ Генераторы (жёлтые)", y, true, function(v) ESPGenerators = v end)
-        y = y + 40
+        y = y + 45
         CreateToggle("👁 Включить ESP", y, false, function(v) ESPEnabled = v end)
+        
+        ContentArea.CanvasSize = UDim2.new(0, 0, 0, y + 50)
         
     elseif section == "Movement" then
         CreateToggle("🚀 Speed Hack", y, false, function(v) SpeedEnabled = v; UpdateSpeed() end)
-        y = y + 40
+        y = y + 45
         CreateSlider("⚡ Скорость", y, 16, 150, 24, function(v) CustomSpeed = v; UpdateSpeed() end)
-        y = y + 65
+        y = y + 75
         CreateToggle("✈️ Полёт", y, false, function(v) FlyEnabled = v; if not v and BodyFly then BodyFly:Destroy(); BodyFly = nil end end)
-        y = y + 40
+        y = y + 45
         CreateSlider("🕊️ Скорость полёта", y, 20, 150, 50, function(v) FlySpeed = v end)
-        y = y + 65
+        y = y + 75
         CreateToggle("🧱 Ноуклип", y, false, function(v) NoclipEnabled = v; UpdateNoclip() end)
+        
+        ContentArea.CanvasSize = UDim2.new(0, 0, 0, y + 50)
         
     elseif section == "Utility" then
         CreateToggle("👻 Невидимость", y, false, function(v) InvisEnabled = v; ToggleInvis(v) end)
-        y = y + 40
+        y = y + 45
         CreateToggle("🔧 Авто-генератор", y, false, function(v) AutoGenEnabled = v end)
-        y = y + 40
+        y = y + 45
         CreateToggle("🚧 Авто-барикада", y, false, function(v) AutoBarricadeEnabled = v end)
-        y = y + 40
+        y = y + 45
         CreateToggle("⚡ Беск. стамина", y, false, function(v) InfiniteStaminaEnabled = v end)
         
+        ContentArea.CanvasSize = UDim2.new(0, 0, 0, y + 50)
+        
     elseif section == "Teleport" then
-        local sf = Instance.new("ScrollingFrame")
-        sf.Size = UDim2.new(1, -20, 0, 300)
-        sf.Position = UDim2.new(0, 10, 0, y)
-        sf.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
-        sf.BorderSizePixel = 0
-        sf.ScrollBarThickness = 4
-        sf.ScrollBarImageColor3 = Color3.fromRGB(0, 162, 255)
-        sf.CanvasSize = UDim2.new(0, 0, 0, 0)
-        sf.Parent = ContentArea
-        Instance.new("UICorner", sf).CornerRadius = UDim.new(0, 6)
+        local yPos = CreateTPList(y)
+        y = yPos + 10
         
-        local yPos = 5
-        local allPlayers = GetAllPlayersList()
-        
-        for _, data in pairs(allPlayers) do
-            local btn = Instance.new("TextButton")
-            btn.Size = UDim2.new(1, -10, 0, 30)
-            btn.Position = UDim2.new(0, 5, 0, yPos)
-            btn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-            btn.Text = data.Name
-            btn.TextColor3 = Color3.fromRGB(220, 220, 220)
-            btn.Font = Enum.Font.Gotham
-            btn.TextSize = 12
-            btn.Parent = sf
-            Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
-            btn.MouseButton1Click:Connect(function()
-                if CheatDisabled then return end
-                TeleportToPlayer(data.Root)
-            end)
-            yPos = yPos + 35
-        end
-        
-        sf.CanvasSize = UDim2.new(0, 0, 0, yPos + 10)
-        
-        y = y + 310
         CreateContentButton("🚪 ТП на выход", y, TeleportToExit)
-        y = y + 40
+        y = y + 45
         CreateContentButton("❌ Отключить ВСЁ", y, DisableAllCheats)
+        
+        ContentArea.CanvasSize = UDim2.new(0, 0, 0, y + 60)
     end
 end
 
 -- Создание боковых кнопок
 CreateSideButton("Инфо", "ℹ️", 10, function() ShowSection("Info") end)
-CreateSideButton("ESP", "👁", 50, function() ShowSection("ESP") end)
-CreateSideButton("Движение", "🏃", 90, function() ShowSection("Movement") end)
-CreateSideButton("Утилиты", "🔧", 130, function() ShowSection("Utility") end)
-CreateSideButton("Телепорт", "📍", 170, function() ShowSection("Teleport") end)
+CreateSideButton("ESP", "👁", 53, function() ShowSection("ESP") end)
+CreateSideButton("Движение", "🏃", 96, function() ShowSection("Movement") end)
+CreateSideButton("Утилиты", "🔧", 139, function() ShowSection("Utility") end)
+CreateSideButton("Телепорт", "📍", 182, function() ShowSection("Teleport") end)
 
 -- Показываем инфо по умолчанию
 ShowSection("Info")
@@ -763,6 +885,23 @@ BindsTab.MouseButton1Click:Connect(function()
     SideMenu.Visible = false
 end)
 
+-- Создание биндов
+local bindsY = 10
+local function createBind(name, key)
+    local frame, btn, bindName = CreateBindSetting(name, bindsY, key)
+    table.insert(bindElements, {Frame = frame, Button = btn, BindName = bindName})
+    bindsY = bindsY + 50
+end
+
+createBind("Открыть/закрыть меню", "Menu")
+createBind("Невидимость", "Invis")
+createBind("Полёт", "Fly")
+createBind("Телепорт к ближайшему", "Teleport")
+createBind("Speed Hack", "Speed")
+createBind("Отключить ВСЁ", "DisableAll")
+
+BindsContainer.CanvasSize = UDim2.new(0, 0, 0, bindsY + 20)
+
 -- Обработчики
 OpenBtn.MouseButton1Click:Connect(function()
     if GuiDestroyed or CheatDisabled then return end
@@ -773,30 +912,66 @@ end)
 UserInputService.InputBegan:Connect(function(inp, gp)
     if gp or GuiDestroyed then return end
     
-    if inp.KeyCode == Keybinds.Menu then
+    -- Если ожидаем ввод для бинда
+    if ListeningForKey then
+        local newKey = inp.KeyCode
+        
+        if newKey == Enum.KeyCode.Escape then
+            for _, elem in pairs(bindElements) do
+                if elem.Button == ListeningForKey then
+                    Keybinds[elem.BindName] = nil
+                    elem.Button.Text = "None"
+                    break
+                end
+            end
+            ListeningForKey.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+            ListeningForKey = nil
+            return
+        end
+        
+        if newKey ~= Enum.KeyCode.Unknown then
+            for _, elem in pairs(bindElements) do
+                if elem.Button == ListeningForKey then
+                    Keybinds[elem.BindName] = newKey
+                    elem.Button.Text = tostring(newKey):gsub("Enum.KeyCode.", "")
+                    break
+                end
+            end
+        end
+        ListeningForKey.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+        ListeningForKey = nil
+        return
+    end
+    
+    -- Проверяем бинды
+    if Keybinds.Menu and inp.KeyCode == Keybinds.Menu then
         if CheatDisabled then return end
         MenuVisible = not MenuVisible
         Main.Visible = MenuVisible
     end
     
-    if inp.KeyCode == Keybinds.DisableAll then
+    if Keybinds.DisableAll and inp.KeyCode == Keybinds.DisableAll then
         DisableAllCheats()
         return
     end
     
     if CheatDisabled then return end
     
-    if inp.KeyCode == Keybinds.Invis then
+    if Keybinds.Invis and inp.KeyCode == Keybinds.Invis then
         InvisEnabled = not InvisEnabled
         ToggleInvis(InvisEnabled)
     end
     
-    if inp.KeyCode == Keybinds.Fly then
+    if Keybinds.Fly and inp.KeyCode == Keybinds.Fly then
         FlyEnabled = not FlyEnabled
         if not FlyEnabled and BodyFly then BodyFly:Destroy(); BodyFly = nil end
     end
     
-    if inp.KeyCode == Keybinds.Speed then
+    if Keybinds.Teleport and inp.KeyCode == Keybinds.Teleport then
+        TeleportToNearest()
+    end
+    
+    if Keybinds.Speed and inp.KeyCode == Keybinds.Speed then
         SpeedEnabled = not SpeedEnabled
         UpdateSpeed()
     end
@@ -827,5 +1002,7 @@ spawn(function()
     end
 end)
 
-print("✅ Giga GUI v3.0 Loaded!")
+print("✅ Giga GUI v3.1 Loaded!")
 print("🎮 Создатель: Gigaed")
+print("⚡ Speed Hack исправлен!")
+print("⌨️ Бинды работают!")
