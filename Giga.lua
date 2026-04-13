@@ -1,5 +1,5 @@
--- // Giga GUI - Forsaken
--- // Исправлена невидимость, добавлена бесконечная стамина, бинды с Esc
+-- // Giga GUI + Рабочая невидимость из Pastebin
+-- // Исправлено: Speed Hack, полное отключение, кей-бинды
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -8,6 +8,7 @@ local Workspace = game:GetService("Workspace")
 local Camera = Workspace.CurrentCamera
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
+local HttpService = game:GetService("HttpService")
 
 repeat wait() until Players.LocalPlayer
 local LocalPlayer = Players.LocalPlayer
@@ -21,6 +22,12 @@ pcall(function()
     end)
 end)
 
+-- ========== ЗАГРУЗКА НЕВИДИМОСТИ ИЗ PASTEBIN ==========
+local InvisModule = nil
+pcall(function()
+    InvisModule = loadstring(game:HttpGet('https://pastebin.com/raw/3Rnd9rHf'))()
+end)
+
 -- ========== ПЕРЕМЕННЫЕ ==========
 local MenuVisible = false
 local NoclipEnabled = false
@@ -29,26 +36,19 @@ local InvisEnabled = false
 local AutoGenEnabled = false
 local AutoBarricadeEnabled = false
 local SpeedEnabled = false
-local CustomSpeed = 50
+local CustomSpeed = 24
 local FlyEnabled = false
 local BodyFly = nil
 local FlySpeed = 50
 local SizeBoxBarricade = 0.3
 local InfiniteStaminaEnabled = false
-
--- Режим Speed Hack: "Shift" или "Auto"
-local SpeedMode = "Shift"
+local CheatDisabled = false
+local GuiDestroyed = false
 
 local ESPHighlights = {}
 local NoclipConn = nil
-local InvisConn = nil
-local FakeCharacter = nil
-local RealRoot = nil
 
--- Чит полностью выключен
-local CheatDisabled = false
-
--- Кей-бинды (None означает что бинд не назначен)
+-- Кей-бинды
 local Keybinds = {
     Menu = Enum.KeyCode.Insert,
     Invis = Enum.KeyCode.X,
@@ -62,27 +62,36 @@ local ListeningForKey = nil
 
 -- ========== ФУНКЦИИ ==========
 
--- Полное отключение чита
+-- Полное отключение чита (БЕЗВОЗВРАТНО)
 local function DisableAllCheats()
     CheatDisabled = true
+    GuiDestroyed = true
     
     -- Выключаем все функции
     SpeedEnabled = false
-    UpdateSpeed()
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.WalkSpeed = 16 end
+        char:SetAttribute("RunSpeed", 24)
+    end
     
     FlyEnabled = false
     if BodyFly then
         BodyFly:Destroy()
         BodyFly = nil
     end
-    local char = LocalPlayer.Character
-    if char then
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then hum.PlatformStand = false end
-    end
     
     NoclipEnabled = false
-    UpdateNoclip()
+    if NoclipConn then
+        NoclipConn:Disconnect()
+        NoclipConn = nil
+    end
+    if char then
+        for _, p in pairs(char:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide = true end
+        end
+    end
     
     ESPEnabled = false
     for _, h in pairs(ESPHighlights) do
@@ -94,15 +103,21 @@ local function DisableAllCheats()
     AutoBarricadeEnabled = false
     InfiniteStaminaEnabled = false
     
-    if InvisEnabled then
-        InvisEnabled = false
-        ToggleInvis(false)
+    -- Выключаем невидимость через модуль
+    if InvisEnabled and InvisModule and InvisModule.Disable then
+        pcall(function() InvisModule:Disable() end)
+    end
+    InvisEnabled = false
+    
+    -- Уничтожаем GUI
+    if SG then
+        SG:Destroy()
+        SG = nil
     end
     
     MenuVisible = false
-    Main.Visible = false
     
-    print("❌ Чит полностью отключен")
+    print("❌ Чит полностью отключен и уничтожен")
 end
 
 -- Бесконечная стамина
@@ -144,30 +159,22 @@ local function UpdateNoclip()
     end
 end
 
--- Скорость
+-- Скорость (ИСПРАВЛЕНО - один ползунок)
 function UpdateSpeed()
     local char = LocalPlayer.Character
     if char and not CheatDisabled then
         if SpeedEnabled then
-            if SpeedMode == "Auto" then
-                local hum = char:FindFirstChildOfClass("Humanoid")
-                if hum then
-                    hum.WalkSpeed = CustomSpeed
-                end
-                char:SetAttribute("RunSpeed", CustomSpeed)
-            else
-                char:SetAttribute("RunSpeed", CustomSpeed)
-                local hum = char:FindFirstChildOfClass("Humanoid")
-                if hum then
-                    hum.WalkSpeed = 16
-                end
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.WalkSpeed = CustomSpeed
             end
+            char:SetAttribute("RunSpeed", CustomSpeed)
         else
-            char:SetAttribute("RunSpeed", 24)
             local hum = char:FindFirstChildOfClass("Humanoid")
             if hum then
                 hum.WalkSpeed = 16
             end
+            char:SetAttribute("RunSpeed", 24)
         end
     end
 end
@@ -272,106 +279,25 @@ local function doBarricade()
     end
 end
 
--- НЕВИДИМОСТЬ (исправленная версия)
+-- Невидимость через Pastebin модуль
 local function ToggleInvis(state)
     if CheatDisabled and state then return end
-    
-    local char = LocalPlayer.Character
-    if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not root or not hum then return end
-    
-    if not state then
-        -- Выключение
-        if InvisConn then
-            InvisConn:Disconnect()
-            InvisConn = nil
-        end
-        if FakeCharacter then
-            FakeCharacter:Destroy()
-            FakeCharacter = nil
-        end
-        
-        -- Возвращаем видимость
-        for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.Transparency = 0
-            elseif part:IsA("Accessory") then
-                part.Handle.Transparency = 0
-            end
-        end
-        
-        -- Возвращаем камеру
-        Camera.CameraSubject = hum
-        
-        -- Возвращаем на место если нужно
-        if RealRoot then
-            root.CFrame = RealRoot
-            RealRoot = nil
-        end
+    if not InvisModule then
+        print("⚠️ Модуль невидимости не загружен")
         return
     end
     
-    -- Включение невидимости
-    
-    -- Сохраняем позицию
-    RealRoot = root.CFrame
-    
-    -- 1. Создаём ФЕЙКОВОГО персонажа
-    FakeCharacter = Instance.new("Model")
-    FakeCharacter.Name = LocalPlayer.Name .. "_FAKE"
-    FakeCharacter.Parent = workspace
-    
-    -- Копируем все части
-    for _, part in pairs(char:GetChildren()) do
-        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-            local clone = part:Clone()
-            clone.Parent = FakeCharacter
-            clone.Anchored = true
-            clone.CanCollide = false
-            clone.Transparency = 0
-        elseif part:IsA("Accessory") then
-            local clone = part:Clone()
-            clone.Parent = FakeCharacter
-            clone.Handle.Transparency = 0
-        end
+    if state then
+        pcall(function()
+            InvisModule:Enable()
+        end)
+        print("👻 Невидимость ВКЛЮЧЕНА")
+    else
+        pcall(function()
+            InvisModule:Disable()
+        end)
+        print("👻 Невидимость ВЫКЛЮЧЕНА")
     end
-    
-    -- Ставим фейка
-    FakeCharacter:PivotTo(RealRoot)
-    
-    -- 2. Делаем настоящего персонажа ПОЛНОСТЬЮ невидимым
-    for _, part in pairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.Transparency = 1
-        elseif part:IsA("Accessory") then
-            part.Handle.Transparency = 1
-        end
-    end
-    
-    -- 3. Камера следит за фейком
-    Camera.CameraSubject = FakeCharacter
-    
-    -- 4. Постоянно обновляем
-    InvisConn = RunService.RenderStepped:Connect(function()
-        local c = LocalPlayer.Character
-        if c and InvisEnabled and not CheatDisabled then
-            -- Фейк стоит на месте
-            if FakeCharacter and FakeCharacter.Parent then
-                FakeCharacter:PivotTo(RealRoot)
-            end
-            
-            -- Поддерживаем невидимость
-            for _, part in pairs(c:GetDescendants()) do
-                if part:IsA("BasePart") and part.Transparency < 1 then
-                    part.Transparency = 1
-                elseif part:IsA("Accessory") and part.Handle.Transparency < 1 then
-                    part.Handle.Transparency = 1
-                end
-            end
-        end
-    end)
 end
 
 -- Телепорт к ближайшему выжившему
@@ -411,11 +337,6 @@ local function TeleportToNearest()
             if p:IsA("BasePart") and p ~= root then 
                 p.CFrame = root.CFrame 
             end
-        end
-        
-        if InvisEnabled and FakeCharacter then
-            RealRoot = root.CFrame
-            FakeCharacter:PivotTo(RealRoot)
         end
     end
 end
@@ -513,11 +434,6 @@ local function TeleportToPlayer(targetRoot)
                 p.CFrame = root.CFrame 
             end
         end
-        
-        if InvisEnabled and FakeCharacter then
-            RealRoot = root.CFrame
-            FakeCharacter:PivotTo(RealRoot)
-        end
     end
 end
 
@@ -546,8 +462,8 @@ Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(0, 27)
 
 -- Главное меню
 local Main = Instance.new("Frame")
-Main.Size = UDim2.new(0, 380, 0, 680)
-Main.Position = UDim2.new(0.5, -190, 0.5, -340)
+Main.Size = UDim2.new(0, 380, 0, 650)
+Main.Position = UDim2.new(0.5, -190, 0.5, -325)
 Main.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 Main.BorderSizePixel = 1
 Main.BorderColor3 = Color3.fromRGB(45, 45, 55)
@@ -633,7 +549,7 @@ BindsContent.BackgroundTransparency = 1
 BindsContent.BorderSizePixel = 0
 BindsContent.ScrollBarThickness = 5
 BindsContent.ScrollBarImageColor3 = Color3.fromRGB(0, 162, 255)
-BindsContent.CanvasSize = UDim2.new(0, 0, 0, 500)
+BindsContent.CanvasSize = UDim2.new(0, 0, 0, 450)
 BindsContent.Visible = false
 BindsContent.Parent = Main
 
@@ -763,76 +679,6 @@ local function CreateSlider(name, y, min, max, default, callback)
     return frame
 end
 
--- Функция создания выпадающего списка
-local function CreateDropdown(name, y, options, default, callback)
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -20, 0, 50)
-    frame.Position = UDim2.new(0, 10, 0, y)
-    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
-    frame.Parent = Content
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0, 150, 1, 0)
-    label.Position = UDim2.new(0, 12, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text = name
-    label.TextColor3 = Color3.fromRGB(220, 220, 220)
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = frame
-
-    local selected = default
-    local dropdownBtn = Instance.new("TextButton")
-    dropdownBtn.Size = UDim2.new(0, 120, 0, 30)
-    dropdownBtn.Position = UDim2.new(1, -132, 0.5, -15)
-    dropdownBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-    dropdownBtn.Text = selected
-    dropdownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    dropdownBtn.Font = Enum.Font.GothamBold
-    dropdownBtn.TextSize = 13
-    dropdownBtn.Parent = frame
-    Instance.new("UICorner", dropdownBtn).CornerRadius = UDim.new(0, 4)
-
-    local optionsFrame = Instance.new("Frame")
-    optionsFrame.Size = UDim2.new(0, 120, 0, #options * 30)
-    optionsFrame.Position = UDim2.new(1, -132, 0, 40)
-    optionsFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
-    optionsFrame.Visible = false
-    optionsFrame.ZIndex = 10
-    optionsFrame.Parent = frame
-    Instance.new("UICorner", optionsFrame).CornerRadius = UDim.new(0, 4)
-
-    for i, opt in ipairs(options) do
-        local optBtn = Instance.new("TextButton")
-        optBtn.Size = UDim2.new(1, 0, 0, 30)
-        optBtn.Position = UDim2.new(0, 0, 0, (i-1) * 30)
-        optBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
-        optBtn.Text = opt
-        optBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
-        optBtn.Font = Enum.Font.Gotham
-        optBtn.TextSize = 13
-        optBtn.ZIndex = 11
-        optBtn.Parent = optionsFrame
-        
-        optBtn.MouseButton1Click:Connect(function()
-            if CheatDisabled then return end
-            selected = opt
-            dropdownBtn.Text = opt
-            optionsFrame.Visible = false
-            callback(opt)
-        end)
-    end
-
-    dropdownBtn.MouseButton1Click:Connect(function()
-        if CheatDisabled then return end
-        optionsFrame.Visible = not optionsFrame.Visible
-    end)
-
-    return frame
-end
-
 -- Функция создания кнопки
 local function CreateButton(name, y, callback)
     local btn = Instance.new("TextButton")
@@ -909,7 +755,7 @@ local function CreateTPList()
     local sf = Instance.new("ScrollingFrame")
     sf.Name = "TPList"
     sf.Size = UDim2.new(1, -20, 0, 150)
-    sf.Position = UDim2.new(0, 10, 0, 570)
+    sf.Position = UDim2.new(0, 10, 0, 530)
     sf.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
     sf.BorderSizePixel = 0
     sf.ScrollBarThickness = 4
@@ -964,13 +810,7 @@ CreateToggle("🚀 Speed Hack", currentY, false, function(v)
 end)
 currentY = currentY + 45
 
-CreateDropdown("⚙️ Режим Speed", currentY, {"Shift", "Auto"}, "Shift", function(v)
-    SpeedMode = v
-    UpdateSpeed()
-end)
-currentY = currentY + 55
-
-CreateSlider("⚡ Скорость", currentY, 24, 150, 50, function(v)
+CreateSlider("⚡ Скорость", currentY, 16, 150, 24, function(v)
     CustomSpeed = v
     UpdateSpeed()
 end)
@@ -1032,15 +872,15 @@ CreateButton("📋 Обновить список ТП", currentY, function()
 end)
 currentY = currentY + 50
 
--- Кнопка отключения чита
+-- Кнопка отключения чита (ПОЛНОЕ УНИЧТОЖЕНИЕ)
 local disableBtn = Instance.new("TextButton")
 disableBtn.Size = UDim2.new(1, -20, 0, 45)
 disableBtn.Position = UDim2.new(0, 10, 0, currentY)
 disableBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-disableBtn.Text = "❌ ОТКЛЮЧИТЬ ЧИТ"
+disableBtn.Text = "❌ ОТКЛЮЧИТЬ ЧИТ (БЕЗВОЗВРАТНО)"
 disableBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 disableBtn.Font = Enum.Font.GothamBold
-disableBtn.TextSize = 15
+disableBtn.TextSize = 13
 disableBtn.Parent = Content
 Instance.new("UICorner", disableBtn).CornerRadius = UDim.new(0, 8)
 disableBtn.MouseButton1Click:Connect(DisableAllCheats)
@@ -1077,11 +917,12 @@ BindsContent.CanvasSize = UDim2.new(0, 0, 0, bindsY + 20)
 UserInputService.InputBegan:Connect(function(inp, gp)
     if gp then return end
     
+    if GuiDestroyed then return end
+    
     -- Если ожидаем ввод для бинда
     if ListeningForKey then
         local newKey = inp.KeyCode
         
-        -- Если нажат Escape - удаляем бинд
         if newKey == Enum.KeyCode.Escape then
             for _, elem in pairs(bindElements) do
                 if elem.Button == ListeningForKey then
@@ -1109,12 +950,9 @@ UserInputService.InputBegan:Connect(function(inp, gp)
         return
     end
     
-    -- Проверяем нажатые кнопки по биндам (только если бинд не nil)
+    -- Проверяем нажатые кнопки по биндам
     if Keybinds.Menu and inp.KeyCode == Keybinds.Menu then
-        if CheatDisabled then
-            CheatDisabled = false
-            print("✅ Чит снова активен")
-        end
+        if CheatDisabled then return end
         MenuVisible = not MenuVisible
         Main.Visible = MenuVisible
         if MenuVisible then
@@ -1154,10 +992,7 @@ end)
 
 -- Обработчик открытия через кнопку
 OpenBtn.MouseButton1Click:Connect(function()
-    if CheatDisabled then
-        CheatDisabled = false
-        print("✅ Чит снова активен")
-    end
+    if GuiDestroyed or CheatDisabled then return end
     MenuVisible = not MenuVisible
     Main.Visible = MenuVisible
     if MenuVisible then
@@ -1166,8 +1001,8 @@ OpenBtn.MouseButton1Click:Connect(function()
 end)
 
 LocalPlayer.CharacterAdded:Connect(function(char)
+    if GuiDestroyed or CheatDisabled then return end
     task.wait(0.2)
-    if CheatDisabled then return end
     if NoclipEnabled then UpdateNoclip() end
     if SpeedEnabled then UpdateSpeed() end
     if InvisEnabled then
@@ -1177,7 +1012,7 @@ LocalPlayer.CharacterAdded:Connect(function(char)
 end)
 
 RunService.RenderStepped:Connect(function()
-    if CheatDisabled then return end
+    if GuiDestroyed or CheatDisabled then return end
     pcall(updateESP)
     pcall(UpdateFly)
     pcall(doBarricade)
@@ -1186,16 +1021,15 @@ end)
 
 spawn(function()
     while task.wait(0.3) do
-        if CheatDisabled then continue end
+        if GuiDestroyed or CheatDisabled then continue end
         if AutoGenEnabled then pcall(doGenerator) end
         if SpeedEnabled then pcall(UpdateSpeed) end
         if InfiniteStaminaEnabled then pcall(UpdateStamina) end
     end
 end)
 
-print("✅ Giga GUI Loaded!")
+print("✅ Giga GUI + Invis Loaded!")
+print("👻 Невидимость: модуль из Pastebin")
 print("🎮 Управление:")
 print("   [Insert] - Меню | [X] - Невидимость | [Z] - Полёт")
-print("   [C] - ТП | [V] - Speed | [P] - Отключить ВСЁ")
-print("⚡ Бесконечная стамина добавлена!")
-print("⌨️ В биндах: нажми Escape чтобы удалить бинд")
+print("   [C] - ТП | [V] - Speed | [P] - Отключить ВСЁ (безвозвратно)")
