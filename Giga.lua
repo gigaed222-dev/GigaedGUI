@@ -1,4 +1,4 @@
--- // Giga GUI v3.1 - Исправленная версия
+-- // Giga GUI v3.2 - Функции из Zentrix (Iliankytb)
 -- // Автор: Gigaed
 
 local Players = game:GetService("Players")
@@ -21,12 +21,6 @@ pcall(function()
     end)
 end)
 
--- ========== ЗАГРУЗКА НЕВИДИМОСТИ ==========
-local InvisModule = nil
-pcall(function()
-    InvisModule = loadstring(game:HttpGet('https://pastebin.com/raw/3Rnd9rHf'))()
-end)
-
 -- ========== ПЕРЕМЕННЫЕ ==========
 local MenuVisible = false
 local NoclipEnabled = false
@@ -37,8 +31,7 @@ local AutoBarricadeEnabled = false
 local SpeedEnabled = false
 local CustomSpeed = 24
 local FlyEnabled = false
-local BodyFly = nil
-local FlySpeed = 50
+local FlySpeed = 1
 local InfiniteStaminaEnabled = false
 local CheatDisabled = false
 local GuiDestroyed = false
@@ -51,7 +44,7 @@ local ESPGenerators = true
 local ESPHighlights = {}
 local NoclipConn = nil
 
--- Текущий раздел (боковое меню)
+-- Текущий раздел
 local CurrentSection = "Info"
 
 -- Кей-бинды
@@ -64,60 +57,98 @@ local Keybinds = {
     DisableAll = Enum.KeyCode.P
 }
 
-local ListeningForKey = nil
-local bindElements = {}
+-- ========== ФУНКЦИИ ИЗ ZENTRIX ==========
 
--- ========== ФУНКЦИИ ==========
+-- Полёт (рабочий из Zentrix)
+local FLYING = false
+local flyKeyDown, flyKeyUp
+local BodyGyro, BodyVelocity
 
--- Полное отключение
-local function DisableAllCheats()
-    CheatDisabled = true
-    GuiDestroyed = true
+local function sFLY()
+    repeat wait() until LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
     
-    SpeedEnabled = false
-    local char = LocalPlayer.Character
-    if char then
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then hum.WalkSpeed = 16 end
-        char:SetAttribute("RunSpeed", 24)
+    if flyKeyDown then flyKeyDown:Disconnect() end
+    if flyKeyUp then flyKeyUp:Disconnect() end
+
+    local T = LocalPlayer.Character:WaitForChild("HumanoidRootPart")
+    local CONTROL = {F = 0, B = 0, L = 0, R = 0}
+    
+    local function FLY()
+        FLYING = true
+        BodyGyro = Instance.new('BodyGyro')
+        BodyVelocity = Instance.new('BodyVelocity')
+        BodyGyro.P = 9e4
+        BodyGyro.Parent = T
+        BodyVelocity.Parent = T
+        BodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+        BodyGyro.CFrame = T.CFrame
+        BodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        BodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        
+        task.spawn(function()
+            repeat wait()
+                if LocalPlayer.Character:FindFirstChildOfClass('Humanoid') then
+                    LocalPlayer.Character:FindFirstChildOfClass('Humanoid').PlatformStand = true
+                end
+                
+                local speed = 50 * FlySpeed
+                local vec = Vector3.new(0, 0, 0)
+                local cam = workspace.CurrentCamera.CFrame
+                
+                if CONTROL.F > 0 then vec = vec + cam.LookVector end
+                if CONTROL.B < 0 then vec = vec - cam.LookVector end
+                if CONTROL.L < 0 then vec = vec - cam.RightVector end
+                if CONTROL.R > 0 then vec = vec + cam.RightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then vec = vec + Vector3.new(0, 1, 0) end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then vec = vec - Vector3.new(0, 1, 0) end
+                
+                if vec.Magnitude > 0 then
+                    BodyVelocity.Velocity = vec.Unit * speed
+                else
+                    BodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                end
+                
+                BodyGyro.CFrame = cam
+            until not FLYING
+            
+            BodyGyro:Destroy()
+            BodyVelocity:Destroy()
+            if LocalPlayer.Character:FindFirstChildOfClass('Humanoid') then
+                LocalPlayer.Character:FindFirstChildOfClass('Humanoid').PlatformStand = false
+            end
+        end)
     end
     
-    FlyEnabled = false
-    if BodyFly then BodyFly:Destroy(); BodyFly = nil end
-    if char then
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then hum.PlatformStand = false end
-    end
-    
-    NoclipEnabled = false
-    if NoclipConn then NoclipConn:Disconnect(); NoclipConn = nil end
-    if char then
-        for _, p in pairs(char:GetDescendants()) do
-            if p:IsA("BasePart") then p.CanCollide = true end
+    flyKeyDown = game:GetService("UserInputService").InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.KeyCode == Enum.KeyCode.W then CONTROL.F = 1
+        elseif input.KeyCode == Enum.KeyCode.S then CONTROL.B = -1
+        elseif input.KeyCode == Enum.KeyCode.A then CONTROL.L = -1
+        elseif input.KeyCode == Enum.KeyCode.D then CONTROL.R = 1
         end
-    end
+    end)
     
-    ESPEnabled = false
-    for _, h in pairs(ESPHighlights) do
-        pcall(function() h:Destroy() end)
-    end
-    ESPHighlights = {}
+    flyKeyUp = game:GetService("UserInputService").InputEnded:Connect(function(input)
+        if input.KeyCode == Enum.KeyCode.W then CONTROL.F = 0
+        elseif input.KeyCode == Enum.KeyCode.S then CONTROL.B = 0
+        elseif input.KeyCode == Enum.KeyCode.A then CONTROL.L = 0
+        elseif input.KeyCode == Enum.KeyCode.D then CONTROL.R = 0
+        end
+    end)
     
-    AutoGenEnabled = false
-    AutoBarricadeEnabled = false
-    InfiniteStaminaEnabled = false
-    
-    if InvisEnabled and InvisModule and InvisModule.Disable then
-        pcall(function() InvisModule:Disable() end)
-    end
-    InvisEnabled = false
-    
-    if SG then SG:Destroy(); SG = nil end
-    
-    print("❌ Giga GUI отключен")
+    FLY()
 end
 
--- Ноуклип
+local function NOFLY()
+    FLYING = false
+    if flyKeyDown then flyKeyDown:Disconnect() end
+    if flyKeyUp then flyKeyUp:Disconnect() end
+    if LocalPlayer.Character:FindFirstChildOfClass('Humanoid') then
+        LocalPlayer.Character:FindFirstChildOfClass('Humanoid').PlatformStand = false
+    end
+end
+
+-- Ноуклип (рабочий)
 local function UpdateNoclip()
     if NoclipConn then NoclipConn:Disconnect(); NoclipConn = nil end
     if NoclipEnabled and not CheatDisabled then
@@ -139,81 +170,31 @@ local function UpdateNoclip()
     end
 end
 
--- Скорость (ИСПРАВЛЕНО)
+-- Скорость (из Zentrix)
 function UpdateSpeed()
     local char = LocalPlayer.Character
     if not char then return end
     if CheatDisabled then return end
     
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    
     if SpeedEnabled then
-        hum.WalkSpeed = CustomSpeed
         char:SetAttribute("RunSpeed", CustomSpeed)
+        char:SetAttribute("WalkSpeed", CustomSpeed)
     else
-        hum.WalkSpeed = 16
         char:SetAttribute("RunSpeed", 24)
+        char:SetAttribute("WalkSpeed", 16)
     end
 end
 
--- Полёт
-local function UpdateFly()
-    if not FlyEnabled or CheatDisabled then
-        if BodyFly then BodyFly:Destroy(); BodyFly = nil end
-        local char = LocalPlayer.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then hum.PlatformStand = false end
-        end
-        return
-    end
-    
-    local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then
-        if BodyFly then BodyFly:Destroy(); BodyFly = nil end
-        return
-    end
-    
-    local root = char.HumanoidRootPart
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum then hum.PlatformStand = true end
-    
-    if not BodyFly then
-        BodyFly = Instance.new("BodyVelocity")
-        BodyFly.MaxForce = Vector3.new(5000, 5000, 5000)
-        BodyFly.P = 1250
-        BodyFly.Parent = root
-    end
-    
-    local vec = Vector3.new(0, 0, 0)
-    if UserInputService:IsKeyDown(Enum.KeyCode.W) then vec = vec + Camera.CFrame.LookVector end
-    if UserInputService:IsKeyDown(Enum.KeyCode.S) then vec = vec - Camera.CFrame.LookVector end
-    if UserInputService:IsKeyDown(Enum.KeyCode.A) then vec = vec - Camera.CFrame.RightVector end
-    if UserInputService:IsKeyDown(Enum.KeyCode.D) then vec = vec + Camera.CFrame.RightVector end
-    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then vec = vec + Vector3.new(0, 1, 0) end
-    if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then vec = vec - Vector3.new(0, 1, 0) end
-    
-    if vec.Magnitude > 0 then vec = vec.Unit * FlySpeed end
-    BodyFly.Velocity = vec
-end
-
--- Авто Генератор
+-- Авто Генератор (из Zentrix)
 local function doGenerator()
     if not AutoGenEnabled or CheatDisabled then return end
     local gui = LocalPlayer.PlayerGui:FindFirstChild("Gen")
-    if gui then
-        local main = gui:FindFirstChild("GeneratorMain")
-        if main then
-            local event = main:FindFirstChild("Event")
-            if event then
-                event:FireServer({ Wires = true, Switches = true, Lever = true })
-            end
-        end
+    if gui and gui:FindFirstChild("GeneratorMain") then
+        gui.GeneratorMain.Event:FireServer({ Wires = true, Switches = true, Lever = true })
     end
 end
 
--- Авто Барикада
+-- Авто Барикада (из Zentrix)
 local function doBarricade()
     if not AutoBarricadeEnabled or CheatDisabled then return end
     local dot = nil
@@ -236,18 +217,7 @@ local function doBarricade()
     end
 end
 
--- Невидимость
-local function ToggleInvis(state)
-    if CheatDisabled and state then return end
-    if not InvisModule then return end
-    if state then
-        pcall(function() InvisModule:Enable() end)
-    else
-        pcall(function() InvisModule:Disable() end)
-    end
-end
-
--- Бесконечная стамина
+-- Бесконечная стамина (из Zentrix)
 local function UpdateStamina()
     if not InfiniteStaminaEnabled or CheatDisabled then return end
     local char = LocalPlayer.Character
@@ -259,7 +229,26 @@ local function UpdateStamina()
     end
 end
 
--- ESP
+-- Невидимость (простая прозрачность)
+local function ToggleInvis(state)
+    if CheatDisabled and state then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    
+    if state then
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then part.Transparency = 1 end
+            if part:IsA("Accessory") then part.Handle.Transparency = 1 end
+        end
+    else
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then part.Transparency = 0 end
+            if part:IsA("Accessory") then part.Handle.Transparency = 0 end
+        end
+    end
+end
+
+-- ESP (из Zentrix)
 local function createHighlight(model, color)
     pcall(function()
         for _, ex in pairs(model:GetChildren()) do if ex:IsA("Highlight") then ex:Destroy() end end
@@ -325,7 +314,7 @@ local function updateESP()
     end
 end
 
--- Телепорт к игроку
+-- Телепорт
 local function TeleportToPlayer(targetRoot)
     if CheatDisabled then return end
     local char = LocalPlayer.Character
@@ -333,13 +322,9 @@ local function TeleportToPlayer(targetRoot)
     local root = char:FindFirstChild("HumanoidRootPart")
     if root and targetRoot and targetRoot.Parent then
         root.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 2)
-        for _, p in pairs(char:GetChildren()) do
-            if p:IsA("BasePart") and p ~= root then p.CFrame = root.CFrame end
-        end
     end
 end
 
--- Телепорт к ближайшему (для бинда)
 local function TeleportToNearest()
     if CheatDisabled then return end
     local char = LocalPlayer.Character
@@ -356,8 +341,7 @@ local function TeleportToNearest()
             for _, obj in pairs(alive:GetChildren()) do
                 if obj:IsA("Model") then
                     local targetRoot = obj:FindFirstChild("HumanoidRootPart")
-                    local plr = Players:GetPlayerFromCharacter(obj)
-                    if targetRoot and plr and plr ~= LocalPlayer then
+                    if targetRoot then
                         local dist = (root.Position - targetRoot.Position).Magnitude
                         if dist < minDist then
                             minDist = dist
@@ -371,13 +355,9 @@ local function TeleportToNearest()
     
     if nearest then
         root.CFrame = nearest.CFrame + Vector3.new(0, 3, 2)
-        for _, p in pairs(char:GetChildren()) do
-            if p:IsA("BasePart") and p ~= root then p.CFrame = root.CFrame end
-        end
     end
 end
 
--- Телепорт на выход
 local function TeleportToExit()
     if CheatDisabled then return end
     local char = LocalPlayer.Character
@@ -396,7 +376,6 @@ local function TeleportToExit()
     end)
 end
 
--- Получение всех игроков
 local function GetAllPlayersList()
     local list = {}
     for _, plr in pairs(Players:GetPlayers()) do
@@ -405,6 +384,44 @@ local function GetAllPlayersList()
         end
     end
     return list
+end
+
+-- Полное отключение
+local function DisableAllCheats()
+    CheatDisabled = true
+    GuiDestroyed = true
+    
+    SpeedEnabled = false
+    local char = LocalPlayer.Character
+    if char then
+        char:SetAttribute("RunSpeed", 24)
+        char:SetAttribute("WalkSpeed", 16)
+    end
+    
+    if FlyEnabled then
+        FlyEnabled = false
+        NOFLY()
+    end
+    
+    NoclipEnabled = false
+    UpdateNoclip()
+    
+    ESPEnabled = false
+    for _, h in pairs(ESPHighlights) do pcall(function() h:Destroy() end) end
+    ESPHighlights = {}
+    
+    AutoGenEnabled = false
+    AutoBarricadeEnabled = false
+    InfiniteStaminaEnabled = false
+    
+    if InvisEnabled then
+        InvisEnabled = false
+        ToggleInvis(false)
+    end
+    
+    if SG then SG:Destroy(); SG = nil end
+    
+    print("❌ Giga GUI отключен")
 end
 
 -- ========== GUI ==========
@@ -430,7 +447,7 @@ OpenBtn.Draggable = true
 OpenBtn.Parent = SG
 Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(0, 27)
 
--- Главное окно (УВЕЛИЧЕННЫЙ РАЗМЕР)
+-- Главное окно
 local Main = Instance.new("Frame")
 Main.Size = UDim2.new(0, 600, 0, 500)
 Main.Position = UDim2.new(0.5, -300, 0.5, -250)
@@ -447,7 +464,7 @@ Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
 Title.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
-Title.Text = "GIGA GUI v3.1"
+Title.Text = "GIGA GUI v3.2"
 Title.TextColor3 = Color3.fromRGB(0, 162, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 18
@@ -544,7 +561,7 @@ BindsInner.Size = UDim2.new(1, 0, 1, 0)
 BindsInner.BackgroundTransparency = 1
 BindsInner.Parent = BindsContainer
 
--- Функция создания кнопки бокового меню
+-- Функции GUI
 local function CreateSideButton(name, icon, y, callback)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, -10, 0, 38)
@@ -561,7 +578,6 @@ local function CreateSideButton(name, icon, y, callback)
     return btn
 end
 
--- Функция создания переключателя
 local function CreateToggle(name, y, default, callback)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, -20, 0, 38)
@@ -611,7 +627,6 @@ local function CreateToggle(name, y, default, callback)
     return frame
 end
 
--- Функция создания слайдера
 local function CreateSlider(name, y, min, max, default, callback)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, -20, 0, 65)
@@ -658,7 +673,6 @@ local function CreateSlider(name, y, min, max, default, callback)
     return frame
 end
 
--- Функция создания кнопки в контенте
 local function CreateContentButton(name, y, callback)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, -20, 0, 38)
@@ -677,63 +691,10 @@ local function CreateContentButton(name, y, callback)
     return btn
 end
 
--- Функция создания настройки бинда
-local function CreateBindSetting(name, y, keybindName)
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -20, 0, 45)
-    frame.Position = UDim2.new(0, 10, 0, y)
-    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
-    frame.Parent = BindsInner
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0, 220, 1, 0)
-    label.Position = UDim2.new(0, 12, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text = name
-    label.TextColor3 = Color3.fromRGB(220, 220, 220)
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 13
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = frame
-
-    local bindBtn = Instance.new("TextButton")
-    bindBtn.Size = UDim2.new(0, 110, 0, 28)
-    bindBtn.Position = UDim2.new(1, -122, 0.5, -14)
-    bindBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-    bindBtn.Text = Keybinds[keybindName] == nil and "None" or tostring(Keybinds[keybindName]):gsub("Enum.KeyCode.", "")
-    bindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    bindBtn.Font = Enum.Font.GothamBold
-    bindBtn.TextSize = 12
-    bindBtn.Parent = frame
-    Instance.new("UICorner", bindBtn).CornerRadius = UDim.new(0, 4)
-
-    bindBtn.MouseButton1Click:Connect(function()
-        if ListeningForKey == bindBtn then
-            ListeningForKey = nil
-            bindBtn.Text = Keybinds[keybindName] == nil and "None" or tostring(Keybinds[keybindName]):gsub("Enum.KeyCode.", "")
-            bindBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-        else
-            if ListeningForKey then
-                ListeningForKey.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-            end
-            ListeningForKey = bindBtn
-            bindBtn.Text = "НАЖМИ..."
-            bindBtn.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
-        end
-    end)
-
-    return frame, bindBtn, keybindName
-end
-
--- Очистка контента
 local function ClearContent()
-    for _, child in pairs(ContentInner:GetChildren()) do
-        child:Destroy()
-    end
+    for _, child in pairs(ContentInner:GetChildren()) do child:Destroy() end
 end
 
--- Создание списка ТП
 local function CreateTPList(yStart)
     local allPlayers = GetAllPlayersList()
     
@@ -772,7 +733,6 @@ local function CreateTPList(yStart)
     return yPos
 end
 
--- Показ секции
 local function ShowSection(section)
     CurrentSection = section
     ClearContent()
@@ -787,7 +747,7 @@ local function ShowSection(section)
         info.Size = UDim2.new(1, -20, 0, 220)
         info.Position = UDim2.new(0, 10, 0, y)
         info.BackgroundTransparency = 1
-        info.Text = "GIGA GUI v3.1\n\nВозможности:\n• Speed Hack (работает!)\n• Fly\n• Noclip\n• ESP (WallHack)\n• Невидимость\n• Авто-генератор\n• Авто-барикада\n• Бесконечная стамина\n• Телепорты\n\nСоздатель: Gigaed"
+        info.Text = "GIGA GUI v3.2\n\nВозможности:\n• Speed Hack (работает!)\n• Fly (работает!)\n• Noclip\n• ESP (WallHack)\n• Невидимость\n• Авто-генератор\n• Авто-барикада\n• Бесконечная стамина\n• Телепорты\n\nСоздатель: Gigaed"
         info.TextColor3 = Color3.fromRGB(200, 200, 200)
         info.Font = Enum.Font.Gotham
         info.TextSize = 13
@@ -815,7 +775,6 @@ local function ShowSection(section)
         CreateToggle("⚡ Генераторы (жёлтые)", y, true, function(v) ESPGenerators = v end)
         y = y + 45
         CreateToggle("👁 Включить ESP", y, false, function(v) ESPEnabled = v end)
-        
         ContentArea.CanvasSize = UDim2.new(0, 0, 0, y + 50)
         
     elseif section == "Movement" then
@@ -823,12 +782,11 @@ local function ShowSection(section)
         y = y + 45
         CreateSlider("⚡ Скорость", y, 16, 150, 24, function(v) CustomSpeed = v; UpdateSpeed() end)
         y = y + 75
-        CreateToggle("✈️ Полёт", y, false, function(v) FlyEnabled = v; if not v and BodyFly then BodyFly:Destroy(); BodyFly = nil end end)
+        CreateToggle("✈️ Полёт", y, false, function(v) FlyEnabled = v; if v then sFLY() else NOFLY() end end)
         y = y + 45
-        CreateSlider("🕊️ Скорость полёта", y, 20, 150, 50, function(v) FlySpeed = v end)
+        CreateSlider("🕊️ Скорость полёта", y, 1, 10, 1, function(v) FlySpeed = v end)
         y = y + 75
         CreateToggle("🧱 Ноуклип", y, false, function(v) NoclipEnabled = v; UpdateNoclip() end)
-        
         ContentArea.CanvasSize = UDim2.new(0, 0, 0, y + 50)
         
     elseif section == "Utility" then
@@ -839,17 +797,14 @@ local function ShowSection(section)
         CreateToggle("🚧 Авто-барикада", y, false, function(v) AutoBarricadeEnabled = v end)
         y = y + 45
         CreateToggle("⚡ Беск. стамина", y, false, function(v) InfiniteStaminaEnabled = v end)
-        
         ContentArea.CanvasSize = UDim2.new(0, 0, 0, y + 50)
         
     elseif section == "Teleport" then
         local yPos = CreateTPList(y)
         y = yPos + 10
-        
         CreateContentButton("🚪 ТП на выход", y, TeleportToExit)
         y = y + 45
         CreateContentButton("❌ Отключить ВСЁ", y, DisableAllCheats)
-        
         ContentArea.CanvasSize = UDim2.new(0, 0, 0, y + 60)
     end
 end
@@ -861,7 +816,6 @@ CreateSideButton("Движение", "🏃", 96, function() ShowSection("Movemen
 CreateSideButton("Утилиты", "🔧", 139, function() ShowSection("Utility") end)
 CreateSideButton("Телепорт", "📍", 182, function() ShowSection("Teleport") end)
 
--- Показываем инфо по умолчанию
 ShowSection("Info")
 
 -- Переключение вкладок
@@ -885,23 +839,6 @@ BindsTab.MouseButton1Click:Connect(function()
     SideMenu.Visible = false
 end)
 
--- Создание биндов
-local bindsY = 10
-local function createBind(name, key)
-    local frame, btn, bindName = CreateBindSetting(name, bindsY, key)
-    table.insert(bindElements, {Frame = frame, Button = btn, BindName = bindName})
-    bindsY = bindsY + 50
-end
-
-createBind("Открыть/закрыть меню", "Menu")
-createBind("Невидимость", "Invis")
-createBind("Полёт", "Fly")
-createBind("Телепорт к ближайшему", "Teleport")
-createBind("Speed Hack", "Speed")
-createBind("Отключить ВСЁ", "DisableAll")
-
-BindsContainer.CanvasSize = UDim2.new(0, 0, 0, bindsY + 20)
-
 -- Обработчики
 OpenBtn.MouseButton1Click:Connect(function()
     if GuiDestroyed or CheatDisabled then return end
@@ -912,66 +849,34 @@ end)
 UserInputService.InputBegan:Connect(function(inp, gp)
     if gp or GuiDestroyed then return end
     
-    -- Если ожидаем ввод для бинда
-    if ListeningForKey then
-        local newKey = inp.KeyCode
-        
-        if newKey == Enum.KeyCode.Escape then
-            for _, elem in pairs(bindElements) do
-                if elem.Button == ListeningForKey then
-                    Keybinds[elem.BindName] = nil
-                    elem.Button.Text = "None"
-                    break
-                end
-            end
-            ListeningForKey.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-            ListeningForKey = nil
-            return
-        end
-        
-        if newKey ~= Enum.KeyCode.Unknown then
-            for _, elem in pairs(bindElements) do
-                if elem.Button == ListeningForKey then
-                    Keybinds[elem.BindName] = newKey
-                    elem.Button.Text = tostring(newKey):gsub("Enum.KeyCode.", "")
-                    break
-                end
-            end
-        end
-        ListeningForKey.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-        ListeningForKey = nil
-        return
-    end
-    
-    -- Проверяем бинды
-    if Keybinds.Menu and inp.KeyCode == Keybinds.Menu then
+    if inp.KeyCode == Keybinds.Menu then
         if CheatDisabled then return end
         MenuVisible = not MenuVisible
         Main.Visible = MenuVisible
     end
     
-    if Keybinds.DisableAll and inp.KeyCode == Keybinds.DisableAll then
+    if inp.KeyCode == Keybinds.DisableAll then
         DisableAllCheats()
         return
     end
     
     if CheatDisabled then return end
     
-    if Keybinds.Invis and inp.KeyCode == Keybinds.Invis then
+    if inp.KeyCode == Keybinds.Invis then
         InvisEnabled = not InvisEnabled
         ToggleInvis(InvisEnabled)
     end
     
-    if Keybinds.Fly and inp.KeyCode == Keybinds.Fly then
+    if inp.KeyCode == Keybinds.Fly then
         FlyEnabled = not FlyEnabled
-        if not FlyEnabled and BodyFly then BodyFly:Destroy(); BodyFly = nil end
+        if FlyEnabled then sFLY() else NOFLY() end
     end
     
-    if Keybinds.Teleport and inp.KeyCode == Keybinds.Teleport then
+    if inp.KeyCode == Keybinds.Teleport then
         TeleportToNearest()
     end
     
-    if Keybinds.Speed and inp.KeyCode == Keybinds.Speed then
+    if inp.KeyCode == Keybinds.Speed then
         SpeedEnabled = not SpeedEnabled
         UpdateSpeed()
     end
@@ -982,13 +887,12 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     task.wait(0.2)
     if NoclipEnabled then UpdateNoclip() end
     if SpeedEnabled then UpdateSpeed() end
-    if InvisEnabled then task.wait(0.3); ToggleInvis(true) end
+    if InvisEnabled then ToggleInvis(true) end
 end)
 
 RunService.RenderStepped:Connect(function()
     if GuiDestroyed or CheatDisabled then return end
     pcall(updateESP)
-    pcall(UpdateFly)
     pcall(doBarricade)
     pcall(UpdateStamina)
 end)
@@ -1002,7 +906,7 @@ spawn(function()
     end
 end)
 
-print("✅ Giga GUI v3.1 Loaded!")
-print("🎮 Создатель: Gigaed")
-print("⚡ Speed Hack исправлен!")
-print("⌨️ Бинды работают!")
+print("✅ Giga GUI v3.2 Loaded!")
+print("🎮 Функции из Zentrix (Iliankytb)")
+print("⚡ Speed Hack работает!")
+print("✈️ Fly работает!")
