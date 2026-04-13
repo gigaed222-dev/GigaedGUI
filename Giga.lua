@@ -1,4 +1,4 @@
--- // Giga GUI v3.3 - С невидимостью из Pastebin
+-- // Giga GUI v3.4 - Исправлены бинды
 -- // Автор: Gigaed
 
 local Players = game:GetService("Players")
@@ -63,6 +63,9 @@ local Keybinds = {
     Speed = Enum.KeyCode.V,
     DisableAll = Enum.KeyCode.P
 }
+
+local ListeningForKey = nil
+local bindElements = {}
 
 -- ========== ФУНКЦИИ ИЗ ZENTRIX ==========
 
@@ -473,7 +476,7 @@ Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
 Title.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
-Title.Text = "GIGA GUI v3.3"
+Title.Text = "GIGA GUI v3.4"
 Title.TextColor3 = Color3.fromRGB(0, 162, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 18
@@ -555,8 +558,8 @@ ContentInner.Parent = ContentArea
 
 -- Контейнер для биндов
 local BindsContainer = Instance.new("ScrollingFrame")
-BindsContainer.Size = UDim2.new(1, 0, 1, 0)
-BindsContainer.Position = UDim2.new(0, 0, 0, 0)
+BindsContainer.Size = UDim2.new(1, -135, 1, 0)
+BindsContainer.Position = UDim2.new(0, 135, 0, 0)
 BindsContainer.BackgroundTransparency = 1
 BindsContainer.BorderSizePixel = 0
 BindsContainer.ScrollBarThickness = 5
@@ -704,6 +707,55 @@ local function ClearContent()
     for _, child in pairs(ContentInner:GetChildren()) do child:Destroy() end
 end
 
+-- Функция создания настройки бинда
+local function CreateBindSetting(name, y, keybindName)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -20, 0, 45)
+    frame.Position = UDim2.new(0, 10, 0, y)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+    frame.Parent = BindsInner
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0, 220, 1, 0)
+    label.Position = UDim2.new(0, 12, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = Color3.fromRGB(220, 220, 220)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 13
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+
+    local bindBtn = Instance.new("TextButton")
+    bindBtn.Size = UDim2.new(0, 110, 0, 28)
+    bindBtn.Position = UDim2.new(1, -122, 0.5, -14)
+    bindBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    bindBtn.Text = Keybinds[keybindName] == nil and "None" or tostring(Keybinds[keybindName]):gsub("Enum.KeyCode.", "")
+    bindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    bindBtn.Font = Enum.Font.GothamBold
+    bindBtn.TextSize = 12
+    bindBtn.Parent = frame
+    Instance.new("UICorner", bindBtn).CornerRadius = UDim.new(0, 4)
+
+    bindBtn.MouseButton1Click:Connect(function()
+        if ListeningForKey == bindBtn then
+            ListeningForKey = nil
+            bindBtn.Text = Keybinds[keybindName] == nil and "None" or tostring(Keybinds[keybindName]):gsub("Enum.KeyCode.", "")
+            bindBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+        else
+            if ListeningForKey then
+                ListeningForKey.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+            end
+            ListeningForKey = bindBtn
+            bindBtn.Text = "НАЖМИ..."
+            bindBtn.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+        end
+    end)
+
+    return frame, bindBtn, keybindName
+end
+
 local function CreateTPList(yStart)
     local allPlayers = GetAllPlayersList()
     
@@ -756,7 +808,7 @@ local function ShowSection(section)
         info.Size = UDim2.new(1, -20, 0, 220)
         info.Position = UDim2.new(0, 10, 0, y)
         info.BackgroundTransparency = 1
-        info.Text = "GIGA GUI v3.3\n\nВозможности:\n• Speed Hack (работает!)\n• Fly (работает!)\n• Noclip\n• ESP (WallHack)\n• Невидимость (Pastebin)\n• Авто-генератор\n• Авто-барикада\n• Бесконечная стамина\n• Телепорты\n\nСоздатель: Gigaed"
+        info.Text = "GIGA GUI v3.4\n\nВозможности:\n• Speed Hack (работает!)\n• Fly (работает!)\n• Noclip\n• ESP (WallHack)\n• Невидимость (Pastebin)\n• Авто-генератор\n• Авто-барикада\n• Бесконечная стамина\n• Телепорты\n\nСоздатель: Gigaed"
         info.TextColor3 = Color3.fromRGB(200, 200, 200)
         info.Font = Enum.Font.Gotham
         info.TextSize = 13
@@ -827,6 +879,23 @@ CreateSideButton("Телепорт", "📍", 182, function() ShowSection("Telepo
 
 ShowSection("Info")
 
+-- Создание биндов
+local bindsY = 10
+local function createBind(name, key)
+    local frame, btn, bindName = CreateBindSetting(name, bindsY, key)
+    table.insert(bindElements, {Frame = frame, Button = btn, BindName = bindName})
+    bindsY = bindsY + 50
+end
+
+createBind("Открыть/закрыть меню", "Menu")
+createBind("Невидимость", "Invis")
+createBind("Полёт", "Fly")
+createBind("Телепорт к ближайшему", "Teleport")
+createBind("Speed Hack", "Speed")
+createBind("Отключить ВСЁ", "DisableAll")
+
+BindsContainer.CanvasSize = UDim2.new(0, 0, 0, bindsY + 20)
+
 -- Переключение вкладок
 CheatTab.MouseButton1Click:Connect(function()
     CheatTab.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
@@ -858,6 +927,37 @@ end)
 UserInputService.InputBegan:Connect(function(inp, gp)
     if gp or GuiDestroyed then return end
     
+    -- Если ожидаем ввод для бинда
+    if ListeningForKey then
+        local newKey = inp.KeyCode
+        
+        if newKey == Enum.KeyCode.Escape then
+            for _, elem in pairs(bindElements) do
+                if elem.Button == ListeningForKey then
+                    Keybinds[elem.BindName] = nil
+                    elem.Button.Text = "None"
+                    break
+                end
+            end
+            ListeningForKey.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+            ListeningForKey = nil
+            return
+        end
+        
+        if newKey ~= Enum.KeyCode.Unknown then
+            for _, elem in pairs(bindElements) do
+                if elem.Button == ListeningForKey then
+                    Keybinds[elem.BindName] = newKey
+                    elem.Button.Text = tostring(newKey):gsub("Enum.KeyCode.", "")
+                    break
+                end
+            end
+        end
+        ListeningForKey.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+        ListeningForKey = nil
+        return
+    end
+    
     if inp.KeyCode == Keybinds.Menu then
         if CheatDisabled then return end
         MenuVisible = not MenuVisible
@@ -871,21 +971,21 @@ UserInputService.InputBegan:Connect(function(inp, gp)
     
     if CheatDisabled then return end
     
-    if inp.KeyCode == Keybinds.Invis then
+    if Keybinds.Invis and inp.KeyCode == Keybinds.Invis then
         InvisEnabled = not InvisEnabled
         ToggleInvis(InvisEnabled)
     end
     
-    if inp.KeyCode == Keybinds.Fly then
+    if Keybinds.Fly and inp.KeyCode == Keybinds.Fly then
         FlyEnabled = not FlyEnabled
         if FlyEnabled then sFLY() else NOFLY() end
     end
     
-    if inp.KeyCode == Keybinds.Teleport then
+    if Keybinds.Teleport and inp.KeyCode == Keybinds.Teleport then
         TeleportToNearest()
     end
     
-    if inp.KeyCode == Keybinds.Speed then
+    if Keybinds.Speed and inp.KeyCode == Keybinds.Speed then
         SpeedEnabled = not SpeedEnabled
         UpdateSpeed()
     end
@@ -915,6 +1015,6 @@ spawn(function()
     end
 end)
 
-print("✅ Giga GUI v3.3 Loaded!")
-print("👻 Невидимость из Pastebin загружена!")
+print("✅ Giga GUI v3.4 Loaded!")
+print("⌨️ Бинды теперь отображаются!")
 print("🎮 Управление: Insert, X, Z, C, V, P")
