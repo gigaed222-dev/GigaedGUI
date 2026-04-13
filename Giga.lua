@@ -1,4 +1,4 @@
--- // Giga GUI v3.2 - Функции из Zentrix (Iliankytb)
+-- // Giga GUI v3.3 - С невидимостью из Pastebin
 -- // Автор: Gigaed
 
 local Players = game:GetService("Players")
@@ -19,6 +19,13 @@ pcall(function()
         VirtualUser:CaptureController()
         VirtualUser:ClickButton2(Vector2.new())
     end)
+end)
+
+-- ========== ЗАГРУЗКА НЕВИДИМОСТИ ИЗ PASTEBIN ==========
+local InvisModule = nil
+pcall(function()
+    InvisModule = loadstring(game:HttpGet('https://pastebin.com/raw/3Rnd9rHf'))()
+    print("✅ Модуль невидимости загружен")
 end)
 
 -- ========== ПЕРЕМЕННЫЕ ==========
@@ -59,7 +66,7 @@ local Keybinds = {
 
 -- ========== ФУНКЦИИ ИЗ ZENTRIX ==========
 
--- Полёт (рабочий из Zentrix)
+-- Полёт
 local FLYING = false
 local flyKeyDown, flyKeyUp
 local BodyGyro, BodyVelocity
@@ -148,7 +155,7 @@ local function NOFLY()
     end
 end
 
--- Ноуклип (рабочий)
+-- Ноуклип
 local function UpdateNoclip()
     if NoclipConn then NoclipConn:Disconnect(); NoclipConn = nil end
     if NoclipEnabled and not CheatDisabled then
@@ -170,7 +177,7 @@ local function UpdateNoclip()
     end
 end
 
--- Скорость (из Zentrix)
+-- Скорость
 function UpdateSpeed()
     local char = LocalPlayer.Character
     if not char then return end
@@ -185,7 +192,7 @@ function UpdateSpeed()
     end
 end
 
--- Авто Генератор (из Zentrix)
+-- Авто Генератор
 local function doGenerator()
     if not AutoGenEnabled or CheatDisabled then return end
     local gui = LocalPlayer.PlayerGui:FindFirstChild("Gen")
@@ -194,7 +201,7 @@ local function doGenerator()
     end
 end
 
--- Авто Барикада (из Zentrix)
+-- Авто Барикада
 local function doBarricade()
     if not AutoBarricadeEnabled or CheatDisabled then return end
     local dot = nil
@@ -217,7 +224,7 @@ local function doBarricade()
     end
 end
 
--- Бесконечная стамина (из Zentrix)
+-- Бесконечная стамина
 local function UpdateStamina()
     if not InfiniteStaminaEnabled or CheatDisabled then return end
     local char = LocalPlayer.Character
@@ -229,26 +236,28 @@ local function UpdateStamina()
     end
 end
 
--- Невидимость (простая прозрачность)
+-- НЕВИДИМОСТЬ ИЗ PASTEBIN
 local function ToggleInvis(state)
     if CheatDisabled and state then return end
-    local char = LocalPlayer.Character
-    if not char then return end
+    if not InvisModule then
+        print("⚠️ Модуль невидимости не загружен")
+        return
+    end
     
     if state then
-        for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then part.Transparency = 1 end
-            if part:IsA("Accessory") then part.Handle.Transparency = 1 end
-        end
+        pcall(function()
+            InvisModule:Enable()
+        end)
+        print("👻 Невидимость ВКЛЮЧЕНА (Pastebin)")
     else
-        for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then part.Transparency = 0 end
-            if part:IsA("Accessory") then part.Handle.Transparency = 0 end
-        end
+        pcall(function()
+            InvisModule:Disable()
+        end)
+        print("👻 Невидимость ВЫКЛЮЧЕНА")
     end
 end
 
--- ESP (из Zentrix)
+-- ESP
 local function createHighlight(model, color)
     pcall(function()
         for _, ex in pairs(model:GetChildren()) do if ex:IsA("Highlight") then ex:Destroy() end end
@@ -414,10 +423,10 @@ local function DisableAllCheats()
     AutoBarricadeEnabled = false
     InfiniteStaminaEnabled = false
     
-    if InvisEnabled then
-        InvisEnabled = false
-        ToggleInvis(false)
+    if InvisEnabled and InvisModule and InvisModule.Disable then
+        pcall(function() InvisModule:Disable() end)
     end
+    InvisEnabled = false
     
     if SG then SG:Destroy(); SG = nil end
     
@@ -464,7 +473,7 @@ Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
 Title.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
-Title.Text = "GIGA GUI v3.2"
+Title.Text = "GIGA GUI v3.3"
 Title.TextColor3 = Color3.fromRGB(0, 162, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 18
@@ -747,7 +756,7 @@ local function ShowSection(section)
         info.Size = UDim2.new(1, -20, 0, 220)
         info.Position = UDim2.new(0, 10, 0, y)
         info.BackgroundTransparency = 1
-        info.Text = "GIGA GUI v3.2\n\nВозможности:\n• Speed Hack (работает!)\n• Fly (работает!)\n• Noclip\n• ESP (WallHack)\n• Невидимость\n• Авто-генератор\n• Авто-барикада\n• Бесконечная стамина\n• Телепорты\n\nСоздатель: Gigaed"
+        info.Text = "GIGA GUI v3.3\n\nВозможности:\n• Speed Hack (работает!)\n• Fly (работает!)\n• Noclip\n• ESP (WallHack)\n• Невидимость (Pastebin)\n• Авто-генератор\n• Авто-барикада\n• Бесконечная стамина\n• Телепорты\n\nСоздатель: Gigaed"
         info.TextColor3 = Color3.fromRGB(200, 200, 200)
         info.Font = Enum.Font.Gotham
         info.TextSize = 13
@@ -887,7 +896,7 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     task.wait(0.2)
     if NoclipEnabled then UpdateNoclip() end
     if SpeedEnabled then UpdateSpeed() end
-    if InvisEnabled then ToggleInvis(true) end
+    if InvisEnabled then task.wait(0.3); ToggleInvis(true) end
 end)
 
 RunService.RenderStepped:Connect(function()
@@ -906,7 +915,6 @@ spawn(function()
     end
 end)
 
-print("✅ Giga GUI v3.2 Loaded!")
-print("🎮 Функции из Zentrix (Iliankytb)")
-print("⚡ Speed Hack работает!")
-print("✈️ Fly работает!")
+print("✅ Giga GUI v3.3 Loaded!")
+print("👻 Невидимость из Pastebin загружена!")
+print("🎮 Управление: Insert, X, Z, C, V, P")
